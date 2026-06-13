@@ -186,10 +186,10 @@ __global__ void evaluate_kernel(
     __shared__ unsigned long long s_white_wins[7];
     __shared__ unsigned long long s_draws[7];
     
-    if (threadIdx.x < 7) {
-        s_black_wins[threadIdx.x] = 0;
-        s_white_wins[threadIdx.x] = 0;
-        s_draws[threadIdx.x] = 0;
+    for (int candidate = threadIdx.x; candidate < 7; candidate += blockDim.x) {
+        s_black_wins[candidate] = 0;
+        s_white_wins[candidate] = 0;
+        s_draws[candidate] = 0;
     }
     __syncthreads();
     
@@ -218,8 +218,7 @@ __global__ void evaluate_kernel(
     __syncthreads();
     
     // Write back block totals to global memory once per block
-    if (threadIdx.x < 7 && threadIdx.x < candidates) {
-        const int c = threadIdx.x;
+    for (int c = threadIdx.x; c < candidates; c += blockDim.x) {
         if (s_black_wins[c] > 0) atomicAdd(&counts[c].black_wins, s_black_wins[c]);
         if (s_white_wins[c] > 0) atomicAdd(&counts[c].white_wins, s_white_wins[c]);
         if (s_draws[c] > 0)      atomicAdd(&counts[c].draws, s_draws[c]);
@@ -230,6 +229,18 @@ __global__ void evaluate_kernel(
 void check_cuda(cudaError_t error, const char* label) {
     if (error != cudaSuccess) {
         throw std::runtime_error(std::string(label) + ": " + cudaGetErrorString(error));
+    }
+}
+
+void validate_thread_count(int threads) {
+    int device = 0;
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, device), "cudaGetDeviceProperties");
+    if (threads > properties.maxThreadsPerBlock) {
+        throw std::runtime_error(
+            "--threads exceeds this GPU's maxThreadsPerBlock (" +
+            std::to_string(properties.maxThreadsPerBlock) + ")");
     }
 }
 
@@ -484,6 +495,7 @@ int main(int argc, char** argv) {
         if (simulations_per_move <= 0 || threads <= 0) {
             throw std::runtime_error("--simulations-per-move and --threads must be positive");
         }
+        validate_thread_count(threads);
 
         const bool computer_first = has_flag(argc, argv, "--computer-first");
         const connect4::Player computer = computer_first ? connect4::Player::Black : connect4::Player::White;

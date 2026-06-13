@@ -292,6 +292,18 @@ void check_cuda(cudaError_t error, const char* label) {
     }
 }
 
+void validate_thread_count(int threads) {
+    int device = 0;
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, device), "cudaGetDeviceProperties");
+    if (threads > properties.maxThreadsPerBlock) {
+        throw std::runtime_error(
+            "--threads exceeds this GPU's maxThreadsPerBlock (" +
+            std::to_string(properties.maxThreadsPerBlock) + ")");
+    }
+}
+
 int parse_int_arg(int argc, char** argv, const std::string& name, int fallback) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (argv[i] == name) {
@@ -365,26 +377,29 @@ int add_node(std::vector<TreeNode>& nodes, const connect4::Board& board, int par
 }
 
 void build_frontier(std::vector<TreeNode>& nodes, int node_index, int frontier_depth, int max_depth) {
-    TreeNode& node = nodes[node_index];
-    if (connect4::terminal_outcome(node.board) != connect4::Outcome::Unknown ||
-        node.depth >= frontier_depth ||
-        node.board.moves >= max_depth) {
-        node.leaf = true;
+    const connect4::Board board = nodes[node_index].board;
+    const int depth = nodes[node_index].depth;
+    const int root_move_from_parent = nodes[node_index].root_move;
+
+    if (connect4::terminal_outcome(board) != connect4::Outcome::Unknown ||
+        depth >= frontier_depth ||
+        board.moves >= max_depth) {
+        nodes[node_index].leaf = true;
         return;
     }
 
     for (int col : move_order()) {
-        if (!connect4::can_play(node.board, col)) {
+        if (!connect4::can_play(board, col)) {
             continue;
         }
-        const connect4::MoveResult child = connect4::play(node.board, col);
-        const int root_move = node.root_move >= 0 ? node.root_move : col;
-        const int child_index = add_node(nodes, child.board, node_index, root_move, node.depth + 1);
+        const connect4::MoveResult child = connect4::play(board, col);
+        const int root_move = root_move_from_parent >= 0 ? root_move_from_parent : col;
+        const int child_index = add_node(nodes, child.board, node_index, root_move, depth + 1);
         build_frontier(nodes, child_index, frontier_depth, max_depth);
     }
 
-    if (node.children.empty()) {
-        node.leaf = true;
+    if (nodes[node_index].children.empty()) {
+        nodes[node_index].leaf = true;
     }
 }
 
@@ -453,6 +468,9 @@ int main(int argc, char** argv) {
             std::cout << "terminal position\n";
             return 0;
         }
+        if (max_depth <= root_board.moves) {
+            throw std::runtime_error("--max-depth must be greater than the number of moves in the position");
+        }
 
         std::vector<TreeNode> nodes;
         nodes.reserve(100000);
@@ -475,7 +493,9 @@ int main(int argc, char** argv) {
             }
         }
 
+        float kernel_ms = 0.0F;
         if (!leaf_boards.empty()) {
+            validate_thread_count(threads);
             check_cuda(cudaDeviceSetLimit(cudaLimitStackSize, static_cast<std::size_t>(stack_bytes)), "cudaDeviceSetLimit stack");
 
             DeviceBoard* device_leaves = nullptr;
@@ -486,9 +506,18 @@ int main(int argc, char** argv) {
             check_cuda(cudaMemcpy(device_leaves, leaf_boards.data(), leaf_boards.size() * sizeof(DeviceBoard), cudaMemcpyHostToDevice), "copy leaves");
 
             const int blocks = (static_cast<int>(leaf_boards.size()) + threads - 1) / threads;
+            cudaEvent_t kernel_start = nullptr;
+            cudaEvent_t kernel_stop = nullptr;
+            check_cuda(cudaEventCreate(&kernel_start), "cudaEventCreate start");
+            check_cuda(cudaEventCreate(&kernel_stop), "cudaEventCreate stop");
+            check_cuda(cudaEventRecord(kernel_start), "cudaEventRecord start");
             solve_leaves_kernel<<<blocks, threads>>>(device_leaves, static_cast<int>(leaf_boards.size()), max_depth, device_scores);
             check_cuda(cudaGetLastError(), "kernel launch");
-            check_cuda(cudaDeviceSynchronize(), "kernel sync");
+            check_cuda(cudaEventRecord(kernel_stop), "cudaEventRecord stop");
+            check_cuda(cudaEventSynchronize(kernel_stop), "kernel sync");
+            check_cuda(cudaEventElapsedTime(&kernel_ms, kernel_start, kernel_stop), "cudaEventElapsedTime");
+            check_cuda(cudaEventDestroy(kernel_start), "cudaEventDestroy start");
+            check_cuda(cudaEventDestroy(kernel_stop), "cudaEventDestroy stop");
             check_cuda(cudaMemcpy(leaf_scores.data(), device_scores, leaf_scores.size() * sizeof(int), cudaMemcpyDeviceToHost), "copy scores");
             check_cuda(cudaFree(device_leaves), "free leaves");
             check_cuda(cudaFree(device_scores), "free scores");
@@ -526,6 +555,7 @@ int main(int argc, char** argv) {
         std::cout << "frontier_depth " << frontier_depth << "\n";
         std::cout << "tree_nodes " << nodes.size() << "\n";
         std::cout << "gpu_leaves " << leaf_boards.size() << "\n";
+        std::cout << "kernel_ms " << kernel_ms << "\n";
         std::cout << "result " << score_name(best_score) << "\n";
         std::cout << "score " << best_score << "\n";
         std::cout << "best_move " << best_move << "\n";

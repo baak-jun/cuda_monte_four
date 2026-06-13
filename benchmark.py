@@ -1,189 +1,270 @@
+import argparse
+import json
+import statistics
 import subprocess
 import time
-import json
-import os
-import sys
+from pathlib import Path
 
-# 디렉터리 경로 설정
-project_dir = r"C:\Users\Nabi\Desktop\26-1\Parallel Programming\project"
-bin_dir = os.path.join(project_dir, "build", "Release")
 
-mc_bin = os.path.join(bin_dir, "monte_carlo_cuda.exe")
-cpu_bin = os.path.join(bin_dir, "perfect_solver_cpu.exe")
-hybrid_bin = os.path.join(bin_dir, "perfect_frontier_cuda.exe")
+PROJECT_DIR = Path(__file__).resolve().parent
+BIN_DIR = PROJECT_DIR / "build" / "Release"
 
-# 실행 파일 존재 여부 확인
-for path in [mc_bin, cpu_bin, hybrid_bin]:
-    if not os.path.exists(path):
-        print(f"Error: Executable not found at {path}")
-        print("Please build the project first.")
-        sys.exit(1)
+MC_CUDA_BIN = BIN_DIR / "monte_carlo_cuda.exe"
+MC_CPU_BIN = BIN_DIR / "monte_carlo_cpu.exe"
+CPU_SOLVER_BIN = BIN_DIR / "perfect_solver_cpu.exe"
+HYBRID_BIN = BIN_DIR / "perfect_frontier_cuda.exe"
 
-def run_benchmark(cmd, timeout=30):
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Connect Four CPU/CUDA benchmark suite")
+    parser.add_argument("--quick", action="store_true", help="run a small smoke benchmark")
+    parser.add_argument("--output", type=Path, default=PROJECT_DIR / "benchmark_results.json")
+    parser.add_argument("--mc-simulations", type=int, default=10_000_000)
+    parser.add_argument("--seed", type=int, default=12345)
+    return parser.parse_args()
+
+
+def parse_metrics(output):
+    metrics = {}
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if "=" in line:
+            key, value = line.split("=", 1)
+            metrics[key.strip()] = value.strip()
+        elif " " in line:
+            key, value = line.split(None, 1)
+            metrics[key] = value.strip()
+    return metrics
+
+
+def run_once(command, timeout):
     start = time.perf_counter()
     try:
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
-        duration = time.perf_counter() - start
-        return duration, res.stdout, res.stderr, False
+        completed = subprocess.run(
+            [str(part) for part in command],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired:
-        return timeout, "", "TIMEOUT", True
-
-print("=== Connect Four Solver Benchmark Start ===")
-
-results = {
-    "mc_thread_scaling": [],
-    "cpu_vs_hybrid": [],
-    "frontier_depth_tuning": []
-}
-
-# 1. CUDA Monte Carlo Thread Scaling
-# Simulations: 10,000,000
-mc_simulations = 10000000
-thread_counts = [64, 128, 256, 512, 1024]
-print("\n[1/3] Running CUDA Monte Carlo Thread Scaling...")
-for threads in thread_counts:
-    cmd = [mc_bin, "--simulations", str(mc_simulations), "--threads", str(threads)]
-    print(f"  Threads: {threads}...", end="", flush=True)
-    
-    # 3번 반복해서 평균 내기
-    durations = []
-    success = True
-    for _ in range(3):
-        dur, stdout, stderr, is_timeout = run_benchmark(cmd, timeout=60)
-        if is_timeout or "error" in stderr.lower():
-            success = False
-            break
-        durations.append(dur)
-        
-    if success:
-        avg_dur = sum(durations) / len(durations)
-        sims_per_sec = mc_simulations / avg_dur
-        results["mc_thread_scaling"].append({
-            "threads": threads,
-            "duration_sec": avg_dur,
-            "sims_per_sec": sims_per_sec
-        })
-        print(f" Done. Avg Time: {avg_dur:.4f}s ({sims_per_sec/1e6:.2f} Msims/sec)")
-    else:
-        print(" Failed / Timeout.")
-
-# 2. CPU Negamax Alpha-Beta vs Hybrid CUDA Negamax
-# Depths: 10 to 16
-depths = list(range(10, 17))
-print("\n[2/3] Comparing CPU Solver and Hybrid CUDA Solver...")
-for depth in depths:
-    print(f"  Depth: {depth}...")
-    
-    # CPU Solver
-    cpu_cmd = [cpu_bin, "--max-depth", str(depth), "--reserve", "2000000"]
-    print("    Running CPU...", end="", flush=True)
-    cpu_dur, cpu_out, cpu_err, cpu_timeout = run_benchmark(cpu_cmd, timeout=30)
-    
-    cpu_nodes = 0
-    if not cpu_timeout and cpu_out:
-        for line in cpu_out.splitlines():
-            if line.startswith("nodes "):
-                cpu_nodes = int(line.split()[1])
-        print(f" Done. Time: {cpu_dur:.4f}s, Nodes: {cpu_nodes}")
-    else:
-        print(" Timeout/Failed")
-        cpu_dur = None
-        
-    # Hybrid GPU Solver
-    hybrid_cmd = [hybrid_bin, "--max-depth", str(depth), "--frontier-depth", "5", "--threads", "256"]
-    print("    Running Hybrid GPU...", end="", flush=True)
-    hyb_dur, hyb_out, hyb_err, hyb_timeout = run_benchmark(hybrid_cmd, timeout=30)
-    
-    hyb_nodes = 0
-    gpu_leaves = 0
-    if not hyb_timeout and hyb_out:
-        for line in hyb_out.splitlines():
-            if line.startswith("tree_nodes "):
-                hyb_nodes = int(line.split()[1])
-            elif line.startswith("gpu_leaves "):
-                gpu_leaves = int(line.split()[1])
-        print(f" Done. Time: {hyb_dur:.4f}s, Nodes: {hyb_nodes}, GPU Leaves: {gpu_leaves}")
-    else:
-        print(" Timeout/Failed")
-        hyb_dur = None
-        
-    results["cpu_vs_hybrid"].append({
-        "depth": depth,
-        "cpu": {
-            "duration_sec": cpu_dur,
-            "nodes": cpu_nodes,
-            "timeout": cpu_timeout
-        },
-        "hybrid": {
-            "duration_sec": hyb_dur,
-            "nodes": hyb_nodes,
-            "gpu_leaves": gpu_leaves,
-            "timeout": hyb_timeout
+        return {
+            "ok": False,
+            "timeout": True,
+            "wall_sec": timeout,
+            "stdout": "",
+            "stderr": "TIMEOUT",
+            "metrics": {},
         }
-    })
 
-# 3. Frontier Depth Tuning (Hybrid CUDA Solver)
-# Fixed Max Depth: 16, vary Frontier Depth from 2 to 7
-tuning_max_depth = 16
-frontier_depths = [2, 3, 4, 5, 6, 7]
-print("\n[3/3] Tuning Frontier Depth for Hybrid Solver (Max Depth 16)...")
-for f_depth in frontier_depths:
-    cmd = [hybrid_bin, "--max-depth", str(tuning_max_depth), "--frontier-depth", str(f_depth), "--threads", "256"]
-    print(f"  Frontier Depth: {f_depth}...", end="", flush=True)
-    dur, out, err, is_timeout = run_benchmark(cmd, timeout=30)
-    
-    tree_nodes = 0
-    gpu_leaves = 0
-    if not is_timeout and out:
-        for line in out.splitlines():
-            if line.startswith("tree_nodes "):
-                tree_nodes = int(line.split()[1])
-            elif line.startswith("gpu_leaves "):
-                gpu_leaves = int(line.split()[1])
-        results["frontier_depth_tuning"].append({
-            "frontier_depth": f_depth,
-            "duration_sec": dur,
-            "tree_nodes": tree_nodes,
-            "gpu_leaves": gpu_leaves
-        })
-        print(f" Done. Time: {dur:.4f}s, Tree Nodes: {tree_nodes}, GPU Leaves: {gpu_leaves}")
+    wall_sec = time.perf_counter() - start
+    return {
+        "ok": completed.returncode == 0,
+        "timeout": False,
+        "returncode": completed.returncode,
+        "wall_sec": wall_sec,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "metrics": parse_metrics(completed.stdout),
+    }
+
+
+def summarize(values):
+    if not values:
+        return None
+    return {
+        "mean": statistics.fmean(values),
+        "median": statistics.median(values),
+        "stdev": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+        "samples": len(values),
+    }
+
+
+def run_repeated(command, repeats, timeout, warmups=1):
+    for _ in range(warmups):
+        warmup = run_once(command, timeout)
+        if not warmup["ok"]:
+            return {"ok": False, "phase": "warmup", "error": warmup}
+
+    runs = []
+    for _ in range(repeats):
+        result = run_once(command, timeout)
+        if not result["ok"]:
+            return {"ok": False, "phase": "measurement", "error": result}
+        runs.append(result)
+
+    kernel_times = []
+    for run in runs:
+        if "kernel_ms" in run["metrics"]:
+            kernel_times.append(float(run["metrics"]["kernel_ms"]))
+
+    return {
+        "ok": True,
+        "end_to_end_sec": summarize([run["wall_sec"] for run in runs]),
+        "kernel_ms": summarize(kernel_times),
+        "metrics": runs[-1]["metrics"],
+    }
+
+
+def integer_counts(metrics):
+    keys = ("black_wins", "white_wins", "draws")
+    if not all(key in metrics for key in keys):
+        return None
+    return {key: int(metrics[key]) for key in keys}
+
+
+def require_binaries():
+    missing = [
+        path
+        for path in (MC_CUDA_BIN, MC_CPU_BIN, CPU_SOLVER_BIN, HYBRID_BIN)
+        if not path.exists()
+    ]
+    if missing:
+        names = ", ".join(str(path) for path in missing)
+        raise SystemExit(f"Missing executables: {names}. Build Release first.")
+
+
+def benchmark_monte_carlo(results, simulations, seed, quick):
+    repeats = 1 if quick else 5
+    cpu_repeats = 1 if quick else 3
+    thread_counts = [64, 128, 256] if quick else [64, 128, 256, 512, 1024]
+
+    print("\n[1/3] Monte Carlo CPU baseline and CUDA block-size tuning")
+    cpu_command = [MC_CPU_BIN, "--simulations", simulations, "--seed", seed]
+    cpu_result = run_repeated(cpu_command, cpu_repeats, timeout=180, warmups=1)
+    results["mc_cpu_baseline"] = cpu_result
+    cpu_counts = integer_counts(cpu_result.get("metrics", {})) if cpu_result["ok"] else None
+
+    if cpu_result["ok"]:
+        median = cpu_result["end_to_end_sec"]["median"]
+        print(f"  CPU baseline: {median:.4f}s median")
     else:
-        print(" Timeout/Failed")
+        print("  CPU baseline failed")
 
-# Save raw data to JSON
-json_path = os.path.join(project_dir, "benchmark_results.json")
-with open(json_path, "w") as f:
-    json.dump(results, f, indent=4)
-print(f"\nRaw results saved to {json_path}")
+    for threads in thread_counts:
+        command = [
+            MC_CUDA_BIN,
+            "--simulations",
+            simulations,
+            "--threads",
+            threads,
+            "--seed",
+            seed,
+        ]
+        measured = run_repeated(command, repeats, timeout=120, warmups=1)
+        entry = {"block_threads": threads, **measured}
+        if measured["ok"]:
+            gpu_counts = integer_counts(measured["metrics"])
+            entry["counts"] = gpu_counts
+            entry["matches_cpu_counts"] = cpu_counts is not None and gpu_counts == cpu_counts
+            wall = measured["end_to_end_sec"]["median"]
+            kernel = measured["kernel_ms"]["median"] if measured["kernel_ms"] else float("nan")
+            print(
+                f"  block={threads:4d}: wall={wall:.4f}s, kernel={kernel:.3f}ms, "
+                f"CPU match={entry['matches_cpu_counts']}"
+            )
+        else:
+            print(f"  block={threads:4d}: failed")
+        results["mc_block_size_tuning"].append(entry)
 
-# Display Markdown Summary Tables
-print("\n=== BENCHMARK SUMMARY ===")
 
-print("\n### 1. CUDA Monte Carlo Thread Scaling")
-print("| Threads | Avg Time (s) | Throughput (Msims/sec) | Speedup |")
-print("|---------|--------------|------------------------|---------|")
-base_time = results["mc_thread_scaling"][0]["duration_sec"] if results["mc_thread_scaling"] else 1.0
-for entry in results["mc_thread_scaling"]:
-    speedup = base_time / entry["duration_sec"]
-    print(f"| {entry['threads']} | {entry['duration_sec']:.4f}s | {entry['sims_per_sec']/1e6:.2f} | {speedup:.2f}x |")
+def benchmark_cpu_vs_hybrid(results, quick):
+    repeats = 1 if quick else 3
+    depths = [10, 12] if quick else list(range(10, 17))
 
-print("\n### 2. CPU vs Hybrid GPU Solver")
-print("| Depth | CPU Time (s) | CPU Nodes | Hybrid Time (s) | Hybrid Tree Nodes | Speedup |")
-print("|-------|--------------|-----------|-----------------|-------------------|---------|")
-for entry in results["cpu_vs_hybrid"]:
-    cpu_t = f"{entry['cpu']['duration_sec']:.4f}s" if entry['cpu']['duration_sec'] is not None else "TIMEOUT"
-    cpu_n = entry['cpu']['nodes']
-    hyb_t = f"{entry['hybrid']['duration_sec']:.4f}s" if entry['hybrid']['duration_sec'] is not None else "TIMEOUT"
-    hyb_n = entry['hybrid']['nodes']
-    
-    if entry['cpu']['duration_sec'] and entry['hybrid']['duration_sec']:
-        sp = f"{entry['cpu']['duration_sec'] / entry['hybrid']['duration_sec']:.2f}x"
-    else:
-        sp = "N/A"
-    print(f"| {entry['depth']} | {cpu_t} | {cpu_n} | {hyb_t} | {hyb_n} | {sp} |")
+    print("\n[2/3] CPU solver vs hybrid CUDA solver")
+    for depth in depths:
+        cpu_command = [CPU_SOLVER_BIN, "--max-depth", depth, "--reserve", 2_000_000]
+        hybrid_command = [
+            HYBRID_BIN,
+            "--max-depth",
+            depth,
+            "--frontier-depth",
+            5,
+            "--threads",
+            256,
+        ]
+        cpu = run_repeated(cpu_command, repeats, timeout=120, warmups=1)
+        hybrid = run_repeated(hybrid_command, repeats, timeout=120, warmups=1)
+        matches = False
+        if cpu["ok"] and hybrid["ok"]:
+            matches = (
+                cpu["metrics"].get("score") == hybrid["metrics"].get("score")
+                and cpu["metrics"].get("best_move") == hybrid["metrics"].get("best_move")
+            )
 
-print("\n### 3. Frontier Depth Tuning (Max Depth 16)")
-print("| Frontier Depth | GPU Leaves | CPU Tree Nodes | Total Time (s) |")
-print("|----------------|------------|----------------|----------------|")
-for entry in results["frontier_depth_tuning"]:
-    print(f"| {entry['frontier_depth']} | {entry['gpu_leaves']} | {entry['tree_nodes']} | {entry['duration_sec']:.4f}s |")
+        results["cpu_vs_hybrid"].append(
+            {
+                "depth": depth,
+                "cpu": cpu,
+                "hybrid": hybrid,
+                "score_and_best_move_match": matches,
+            }
+        )
+        print(f"  depth={depth:2d}: result match={matches}")
+
+
+def benchmark_frontier_depth(results, quick):
+    repeats = 1 if quick else 3
+    max_depth = 12 if quick else 16
+    frontier_depths = [2, 4] if quick else [2, 3, 4, 5, 6, 7]
+
+    print("\n[3/3] Hybrid frontier-depth tuning")
+    for frontier_depth in frontier_depths:
+        command = [
+            HYBRID_BIN,
+            "--max-depth",
+            max_depth,
+            "--frontier-depth",
+            frontier_depth,
+            "--threads",
+            256,
+        ]
+        measured = run_repeated(command, repeats, timeout=120, warmups=1)
+        results["frontier_depth_tuning"].append(
+            {"frontier_depth": frontier_depth, "max_depth": max_depth, **measured}
+        )
+        if measured["ok"]:
+            wall = measured["end_to_end_sec"]["median"]
+            kernel = measured["kernel_ms"]["median"] if measured["kernel_ms"] else float("nan")
+            print(f"  frontier={frontier_depth}: wall={wall:.4f}s, kernel={kernel:.3f}ms")
+        else:
+            print(f"  frontier={frontier_depth}: failed")
+
+
+def main():
+    args = parse_args()
+    require_binaries()
+    simulations = 100_000 if args.quick else args.mc_simulations
+    results = {
+        "metadata": {
+            "benchmark_kind": "block-size tuning, not thread scaling",
+            "mc_simulations": simulations,
+            "seed": args.seed,
+            "quick": args.quick,
+            "timing": {
+                "end_to_end_sec": "subprocess wall time including CUDA initialization",
+                "kernel_ms": "CUDA event time reported by the executable",
+            },
+        },
+        "mc_cpu_baseline": {},
+        "mc_block_size_tuning": [],
+        "cpu_vs_hybrid": [],
+        "frontier_depth_tuning": [],
+    }
+
+    print("=== Connect Four Benchmark ===")
+    benchmark_monte_carlo(results, simulations, args.seed, args.quick)
+    benchmark_cpu_vs_hybrid(results, args.quick)
+    benchmark_frontier_depth(results, args.quick)
+
+    args.output.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print(f"\nRaw results saved to {args.output}")
+
+
+if __name__ == "__main__":
+    main()
