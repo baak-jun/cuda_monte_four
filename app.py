@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import subprocess
 import time
@@ -75,6 +76,22 @@ async def get_index():
     if not os.path.exists(index_path):
         raise HTTPException(status_code=404, detail="index.html not found")
     return FileResponse(index_path)
+
+@app.get("/favicon.svg")
+async def get_favicon():
+    fav_path = os.path.join(PROJECT_DIR, "web", "favicon.svg")
+    if os.path.exists(fav_path):
+        return FileResponse(fav_path)
+    raise HTTPException(status_code=404, detail="favicon not found")
+
+@app.get("/icons.svg")
+async def get_icons():
+    icons_path = os.path.join(PROJECT_DIR, "web", "icons.svg")
+    if os.path.exists(icons_path):
+        return FileResponse(icons_path)
+    raise HTTPException(status_code=404, detail="icons not found")
+
+app.mount("/assets", StaticFiles(directory=os.path.join(PROJECT_DIR, "web", "assets")), name="assets")
 
 @app.post("/api/connect4")
 async def play_connect4(req: Connect4Request, request: Request):
