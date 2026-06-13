@@ -62,7 +62,7 @@ __device__ bool device_has_five(const std::uint8_t* cells, int last_idx) {
             }
         }
 
-        if (count >= 5) {
+        if (count == 5) {
             return true;
         }
     }
@@ -274,6 +274,41 @@ int main(int argc, char** argv) {
             return 0;
         }
 
+        // Immediate Win/Loss Pruning (Offense and Defense Logic)
+        int win_move = -1;
+        int block_move = -1;
+        for (int r = 0; r < gomoku::kRows; ++r) {
+            for (int c = 0; c < gomoku::kCols; ++c) {
+                if (board.cells[r * gomoku::kCols + c] == 0) {
+                    const int idx = r * gomoku::kCols + c;
+                    
+                    // Check if AI can win immediately
+                    gomoku::Board test_win = board;
+                    test_win.cells[idx] = static_cast<std::uint8_t>(board.side_to_move);
+                    if (gomoku::has_five(test_win, idx)) {
+                        win_move = idx;
+                        break;
+                    }
+                    
+                    // Check if opponent can win immediately (needs blocking)
+                    gomoku::Board test_block = board;
+                    test_block.cells[idx] = static_cast<std::uint8_t>(gomoku::other(board.side_to_move));
+                    if (gomoku::has_five(test_block, idx)) {
+                        block_move = idx;
+                    }
+                }
+            }
+            if (win_move != -1) break;
+        }
+
+        if (win_move != -1) {
+            candidates.clear();
+            candidates.push_back({win_move / gomoku::kCols, win_move % gomoku::kCols, 99999});
+        } else if (block_move != -1) {
+            candidates.clear();
+            candidates.push_back({block_move / gomoku::kCols, block_move % gomoku::kCols, 99999});
+        }
+
         // Handle first move shortcut
         if (board.moves == 0) {
             std::cout << "result unknown\nscore 0\nbest_move 7_7\n";
@@ -343,12 +378,33 @@ int main(int argc, char** argv) {
         const auto end_time = std::chrono::high_resolution_clock::now();
         const double duration = std::chrono::duration<double>(end_time - start_time).count();
 
-        // Print rates for top moves
+        // Sort candidates by win rate in descending order
+        struct EvaluatedMove {
+            MoveCandidate move;
+            double win_rate;
+            bool operator>(const EvaluatedMove& other) const {
+                return win_rate > other.win_rate;
+            }
+        };
+
+        std::vector<EvaluatedMove> evaluated_moves;
+        evaluated_moves.reserve(candidates.size());
+        for (size_t idx = 0; idx < candidates.size(); ++idx) {
+            evaluated_moves.push_back({candidates[idx], win_rates[idx]});
+        }
+        std::sort(evaluated_moves.begin(), evaluated_moves.end(), std::greater<EvaluatedMove>());
+
+        // Print rates for top moves (sorted by win rate)
         std::cout << "Gomoku Monte Carlo CUDA\n";
         std::cout << "win rates for candidates:\n";
-        for (size_t idx = 0; idx < std::min(candidates.size(), size_t(7)); ++idx) {
-            std::cout << "move " << candidates[idx].row << "_" << candidates[idx].col 
-                      << " win_rate: " << (win_rates[idx] * 100.0) << "%\n";
+        for (size_t idx = 0; idx < std::min(evaluated_moves.size(), size_t(7)); ++idx) {
+            std::cout << "move " << evaluated_moves[idx].move.row << "_" << evaluated_moves[idx].move.col 
+                      << " win_rate: " << (evaluated_moves[idx].win_rate * 100.0) << "%\n";
+        }
+
+        if (!evaluated_moves.empty()) {
+            best_r = evaluated_moves[0].move.row;
+            best_c = evaluated_moves[0].move.col;
         }
 
         std::cout << "best_move " << best_r << "_" << best_c << '\n';

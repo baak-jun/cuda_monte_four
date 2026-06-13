@@ -94,7 +94,7 @@ inline bool has_five(const Board& board, int last_idx) {
             }
         }
 
-        if (count >= 5) {
+        if (count == 5) {
             return true;
         }
     }
