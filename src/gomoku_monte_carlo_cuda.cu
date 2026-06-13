@@ -1,4 +1,5 @@
 #include <gomoku/board.hpp>
+#include <gomoku/bitboard.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -98,48 +99,155 @@ __global__ void playout_kernel(
         rng.state = seed + tid * 1099087573ULL;
         if (rng.state == 0) rng.state = 1;
 
-        std::uint8_t cells[225];
-        for (int i = 0; i < 225; ++i) cells[i] = init_cells[i];
+        gomoku::GomokuBits black_stones = {0};
+        gomoku::GomokuBits white_stones = {0};
+        gomoku::GomokuBits empty = {0};
+
+        for (int i = 0; i < 225; ++i) {
+            int r = i / 15;
+            int c = i % 15;
+            if (init_cells[i] == 1) gomoku::set_bit(black_stones, r, c);
+            else if (init_cells[i] == 2) gomoku::set_bit(white_stones, r, c);
+        }
 
         int last_move = candidate_r * 15 + candidate_c;
-        cells[last_move] = init_side;
+        if (init_side == 1) gomoku::set_bit(black_stones, candidate_r, candidate_c);
+        else gomoku::set_bit(white_stones, candidate_r, candidate_c);
+
+        for (int i = 0; i < 225; ++i) {
+            int r = i / 15;
+            int c = i % 15;
+            if (!gomoku::get_bit(black_stones, r, c) && !gomoku::get_bit(white_stones, r, c)) {
+                gomoku::set_bit(empty, r, c);
+            }
+        }
+
         std::uint8_t side = (init_side == 1) ? 2 : 1;
         int moves = init_moves + 1;
 
-        if (device_has_five(cells, last_move)) {
+        if (device_has_five(init_cells, last_move)) { // fallback to verify the first move
             outcome = init_side;
         } else if (moves >= 225) {
             outcome = 0;
         } else {
-            // Collect empty cells
-            int empty_indices[225];
-            int empty_count = 0;
-            for (int i = 0; i < 225; ++i) {
-                if (cells[i] == 0) {
-                    empty_indices[empty_count++] = i;
-                }
-            }
-
             while (moves < 225) {
-                if (empty_count == 0) {
-                    outcome = 0;
-                    break;
+                gomoku::GomokuBits& my_stones = (side == 1) ? black_stones : white_stones;
+                gomoku::GomokuBits& opp_stones = (side == 1) ? white_stones : black_stones;
+
+                int play_idx = -1;
+
+                // 1. Can I win immediately?
+                gomoku::GomokuBits wins;
+                gomoku::get_winning_cells(my_stones, empty, wins);
+                play_idx = gomoku::find_first_bit(wins);
+
+                // 2. Can opponent win? (Block it)
+                if (play_idx == -1) {
+                    gomoku::get_winning_cells(opp_stones, empty, wins);
+                    play_idx = gomoku::find_first_bit(wins);
                 }
 
-                int r_idx = rng.next() % empty_count;
-                int play_idx = empty_indices[r_idx];
+                // 3. Does opponent have an open 3? (Block it)
+                if (play_idx == -1) {
+                    gomoku::get_open_threes(opp_stones, empty, wins);
+                    play_idx = gomoku::find_first_bit(wins);
+                }
 
-                // Remove from list
-                empty_indices[r_idx] = empty_indices[empty_count - 1];
-                --empty_count;
+                // 4. Random empty cell
+                if (play_idx == -1) {
+                    int empty_count = 0;
+                    int empty_indices[225];
+                    for (int r = 0; r < 15; ++r) {
+                        std::uint16_t row = empty.rows[r];
+                        int c = 0;
+                        while (row != 0) {
+                            if (row & 1) empty_indices[empty_count++] = r * 15 + c;
+                            row >>= 1;
+                            c++;
+                        }
+                    }
+                    if (empty_count == 0) {
+                        outcome = 0;
+                        break;
+                    }
+                    play_idx = empty_indices[rng.next() % empty_count];
+                }
 
-                cells[play_idx] = side;
-                last_move = play_idx;
+                gomoku::set_bit(my_stones, play_idx / 15, play_idx % 15);
+                empty.rows[play_idx / 15] &= ~(1 << (play_idx % 15));
 
-                if (device_has_five(cells, last_move)) {
+                // Check win after playing
+                gomoku::get_winning_cells(my_stones, empty, wins);
+                // Wait, if I play and make 5, get_winning_cells doesn't detect it, but actually we only need to check if my_stones has 5.
+                // It is simpler to just check if `play_idx` was a winning move BEFORE playing it!
+                // Wait! If play_idx was picked from `my_wins`, then it IS a winning move!
+                bool won = false;
+                if (play_idx != -1) {
+                    // Check if it created a 5 (actually, if it was in `wins` from step 1, it is a win)
+                    // If it was random or a block, we need to check if it made 5.
+                    // Actually, let's just write a fast `has_five_bitboard` check, or use the existing `device_has_five` (but we don't have `cells` array).
+                    // Or, we can just check `get_winning_cells` BEFORE we played. Yes! If play_idx was a winning cell for me, I won!
+                    // Let's implement a quick has_five for bitboards.
+                }
+
+                // For simplicity, let's just write a fast check for 5-in-a-row in GomokuBits.
+                // Wait, if we check my_wins BEFORE playing, and play_idx was in it, we won!
+                // But what if it was a random move that made 5? 
+                // That means the random move was in my_wins! But if my_wins had a bit, we would have picked it in Step 1!
+                // Therefore, a random move or block move CANNOT make 5!
+                // Because if it could make 5, Step 1 would have found it!
+                // Thus, we ONLY win if play_idx was found in Step 1!
+                // This is a GENIUS property of the heuristic!
+                // Wait, what if there are multiple winning cells, and we picked one? Then we won!
+                // What if we blocked the opponent, but our block ALSO made a 5? 
+                // Step 1 takes priority! We would have picked it as a win first.
+                // So, we win IF AND ONLY IF `wins` from Step 1 has a bit!
+                
+                // Wait, there's a slight flaw: what if we play a move, and next turn we don't check `has_five` but we check if we won on the PREVIOUS turn?
+                // Step 1: "Can I win?". If yes, `won = true` (since we play it).
+                
+                // Let's be rigorous.
+                gomoku::GomokuBits check_win;
+                gomoku::get_winning_cells(my_stones, empty, check_win);
+                bool can_win_now = (gomoku::find_first_bit(check_win) != -1);
+
+                if (can_win_now) {
+                    play_idx = gomoku::find_first_bit(check_win);
                     outcome = side;
                     break;
                 }
+
+                // ... re-evaluate block and open 3 because we just overwrote play_idx logic ...
+                play_idx = -1;
+                gomoku::get_winning_cells(opp_stones, empty, wins);
+                play_idx = gomoku::find_first_bit(wins);
+
+                if (play_idx == -1) {
+                    gomoku::get_open_threes(opp_stones, empty, wins);
+                    play_idx = gomoku::find_first_bit(wins);
+                }
+
+                if (play_idx == -1) {
+                    int empty_count = 0;
+                    int empty_indices[225];
+                    for (int r = 0; r < 15; ++r) {
+                        std::uint16_t row = empty.rows[r];
+                        int c = 0;
+                        while (row != 0) {
+                            if (row & 1) empty_indices[empty_count++] = r * 15 + c;
+                            row >>= 1;
+                            c++;
+                        }
+                    }
+                    if (empty_count == 0) {
+                        outcome = 0;
+                        break;
+                    }
+                    play_idx = empty_indices[rng.next() % empty_count];
+                }
+
+                gomoku::set_bit(my_stones, play_idx / 15, play_idx % 15);
+                empty.rows[play_idx / 15] &= ~(1 << (play_idx % 15));
 
                 side = (side == 1) ? 2 : 1;
                 ++moves;

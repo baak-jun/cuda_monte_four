@@ -105,6 +105,25 @@ __device__ int heuristic_legal_move(const DeviceBoard& board, std::uint32_t& rng
         }
     }
 
+    // 3. Avoid giving opponent an immediate win
+    int safe_legal[connect4::kCols];
+    int safe_count = 0;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = column_height_device(board, col);
+        if (row + 1 < connect4::kRows) {
+            std::uint64_t opp_bit_above = bit_at_device(row + 1, col);
+            if (!has_four_device(opp_stones | opp_bit_above)) {
+                safe_legal[safe_count++] = col;
+            }
+        } else {
+            safe_legal[safe_count++] = col;
+        }
+    }
+
+    if (safe_count > 0) {
+        return safe_legal[xorshift32(rng) % safe_count];
+    }
     return legal[xorshift32(rng) % count];
 }
 

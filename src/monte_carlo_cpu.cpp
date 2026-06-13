@@ -54,6 +54,25 @@ int heuristic_legal_move(const connect4::Board& board, std::uint32_t& rng) {
         }
     }
 
+    // 3. Avoid giving opponent an immediate win
+    std::array<int, connect4::kCols> safe_legal;
+    int safe_count = 0;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = connect4::column_height(board, col);
+        if (row + 1 < connect4::kRows) {
+            std::uint64_t opp_bit_above = connect4::bit_at(row + 1, col);
+            if (!connect4::has_four(opp_stones | opp_bit_above)) {
+                safe_legal[safe_count++] = col;
+            }
+        } else {
+            safe_legal[safe_count++] = col;
+        }
+    }
+
+    if (safe_count > 0) {
+        return safe_legal[xorshift32(rng) % safe_count];
+    }
     return legal[xorshift32(rng) % count];
 }
 
