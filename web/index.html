@@ -753,6 +753,7 @@
             
             // Trigger AI
             isWaitingForAi = true;
+            document.getElementById('stats-output').innerText = 'AI 연산 중...';
             await getC4AiMove();
         }
 
@@ -778,8 +779,13 @@
                 
                 if (data.error) {
                     alert('에러 발생: ' + data.error);
+                    // Revert last move on failure
+                    if (moves.length > 0) {
+                        moves = moves.slice(0, -1);
+                    }
                     isWaitingForAi = false;
                     sideToMove = 'black';
+                    renderBoard();
                     updateTurnIndicator();
                     return;
                 }
@@ -812,8 +818,13 @@
             } catch (err) {
                 console.error(err);
                 alert('서버 연결 실패. app.py가 실행 중인지 확인하세요.');
+                // Revert last move on failure
+                if (moves.length > 0) {
+                    moves = moves.slice(0, -1);
+                }
                 isWaitingForAi = false;
                 sideToMove = 'black';
+                renderBoard();
                 updateTurnIndicator();
             }
         }
@@ -834,6 +845,7 @@
             updateTurnIndicator();
             
             isWaitingForAi = true;
+            document.getElementById('stats-output').innerText = 'AI 연산 중...';
             getGomokuAiMove();
         }
 
@@ -857,8 +869,15 @@
                 
                 if (data.error) {
                     alert('에러 발생: ' + data.error);
+                    // Revert last move on failure
+                    if (moves) {
+                        const moveList = moves.split(',');
+                        moveList.pop();
+                        moves = moveList.join(',');
+                    }
                     isWaitingForAi = false;
                     sideToMove = 'black';
+                    renderBoard();
                     updateTurnIndicator();
                     return;
                 }
@@ -891,8 +910,15 @@
             } catch (err) {
                 console.error(err);
                 alert('서버 연결 실패. app.py가 실행 중인지 확인하세요.');
+                // Revert last move on failure
+                if (moves) {
+                    const moveList = moves.split(',');
+                    moveList.pop();
+                    moves = moveList.join(',');
+                }
                 isWaitingForAi = false;
                 sideToMove = 'black';
+                renderBoard();
                 updateTurnIndicator();
             }
         }
