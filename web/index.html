@@ -484,6 +484,7 @@
         let moves = '';
         let sideToMove = 'black'; // 'black' (human) or 'white' (computer)
         let isWaitingForAi = false;
+        let isGameOver = false;
         let boardState = []; // 6x7 for c4, 15x15 for gomoku
 
         function switchGame(gameType) {
@@ -491,18 +492,20 @@
             currentGame = gameType;
             
             const body = document.body;
-            document.querySelectorAll('.btn-select').forEach(btn => btn.classList.remove('active'));
+            const buttons = document.querySelectorAll('.btn-select');
+            
+            buttons.forEach(btn => btn.classList.remove('active'));
             if (gameType === 'connect4') {
                 body.classList.remove('game-gomoku');
                 body.classList.add('game-c4');
-                document.querySelector('.btn-select:nth-child(1)').classList.add('active');
+                if (buttons[0]) buttons[0].classList.add('active');
                 document.getElementById('c4-settings').style.display = 'flex';
                 document.getElementById('gomoku-settings').style.display = 'none';
                 document.getElementById('panel-title').innerText = 'Connect Four Settings';
             } else {
                 body.classList.remove('game-c4');
                 body.classList.add('game-gomoku');
-                document.querySelector('.btn-select:nth-child(2)').classList.add('active');
+                if (buttons[1]) buttons[1].classList.add('active');
                 document.getElementById('c4-settings').style.display = 'none';
                 document.getElementById('gomoku-settings').style.display = 'flex';
                 document.getElementById('panel-title').innerText = 'Gomoku Settings';
@@ -514,6 +517,7 @@
             moves = '';
             sideToMove = 'black';
             isWaitingForAi = false;
+            isGameOver = false;
             document.getElementById('stats-output').innerText = '대기 중...';
             document.getElementById('game-status-label').innerText = '진행 중';
             document.getElementById('game-status-label').style.color = '#a0aec0';
@@ -552,10 +556,10 @@
                 for (let c = 0; c < 15; c++) {
                     const color = boardState[r][c];
                     if (color === 0) continue;
-                    if (c <= 11 && color === boardState[r][c+1] && color === boardState[r][c+2] && color === boardState[r][c+3] && color === boardState[r][c+4]) return color;
-                    if (r <= 11 && color === boardState[r+1][c] && color === boardState[r+2][c] && color === boardState[r+3][c] && color === boardState[r+4][c]) return color;
-                    if (r <= 11 && c <= 11 && color === boardState[r+1][c+1] && color === boardState[r+2][c+2] && color === boardState[r+3][c+3] && color === boardState[r+4][c+4]) return color;
-                    if (r >= 4 && c <= 11 && color === boardState[r-1][c+1] && color === boardState[r-2][c+2] && color === boardState[r-3][c+3] && color === boardState[r-4][c+4]) return color;
+                    if (c <= 10 && color === boardState[r][c+1] && color === boardState[r][c+2] && color === boardState[r][c+3] && color === boardState[r][c+4]) return color;
+                    if (r <= 10 && color === boardState[r+1][c] && color === boardState[r+2][c] && color === boardState[r+3][c] && color === boardState[r+4][c]) return color;
+                    if (r <= 10 && c <= 10 && color === boardState[r+1][c+1] && color === boardState[r+2][c+2] && color === boardState[r+3][c+3] && color === boardState[r+4][c+4]) return color;
+                    if (r >= 4 && c <= 10 && color === boardState[r-1][c+1] && color === boardState[r-2][c+2] && color === boardState[r-3][c+3] && color === boardState[r-4][c+4]) return color;
                 }
             }
             return 0;
@@ -666,7 +670,7 @@
                 const outcomeText = winner === 1 ? 'BLACK WINS' : 'WHITE WINS';
                 document.getElementById('game-status-label').innerText = outcomeText;
                 document.getElementById('game-status-label').style.color = winner === 1 ? '#ecc94b' : '#e53e3e';
-                isWaitingForAi = true; // Block further moves
+                isGameOver = true; // Block further moves
                 
                 const text = document.getElementById('turn-status-text');
                 text.innerText = '게임 종료 (' + (winner === 1 ? '흑돌 승리' : '백돌 승리') + ')';
@@ -674,7 +678,7 @@
         }
 
         async function handleC4Click(col) {
-            if (isWaitingForAi || sideToMove !== 'black') return;
+            if (isWaitingForAi || isGameOver || sideToMove !== 'black') return;
             
             // Check if col is full
             if (boardState[0][col] !== 0) return;
@@ -685,7 +689,7 @@
             renderBoard();
             
             // If win was detected, stop here
-            if (isWaitingForAi) return;
+            if (isGameOver) return;
             
             updateTurnIndicator();
             
@@ -758,7 +762,7 @@
 
         // --- Gomoku logic ---
         function handleGomokuClick(row, col) {
-            if (isWaitingForAi || sideToMove !== 'black') return;
+            if (isWaitingForAi || isGameOver || sideToMove !== 'black') return;
             if (boardState[row][col] !== 0) return;
             
             const moveCoord = `${row}_${col}`;
@@ -767,7 +771,7 @@
             renderBoard();
             
             // If win was detected, stop here
-            if (isWaitingForAi) return;
+            if (isGameOver) return;
             
             updateTurnIndicator();
             
