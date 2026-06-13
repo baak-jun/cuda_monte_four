@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -6,8 +6,21 @@ import subprocess
 import time
 import os
 import re
+from collections import defaultdict
 
 app = FastAPI(title="AI Board Game Server")
+
+# Simple in-memory rate limiter: max 20 requests per minute per IP
+ip_request_history = defaultdict(list)
+
+def check_rate_limit(client_ip: str) -> bool:
+    now = time.time()
+    # Keep only requests within the last 60 seconds
+    ip_request_history[client_ip] = [t for t in ip_request_history[client_ip] if now - t < 60]
+    if len(ip_request_history[client_ip]) >= 20:
+        return False
+    ip_request_history[client_ip].append(now)
+    return True
 
 # Allow CORS for local development
 app.add_middleware(
@@ -47,11 +60,20 @@ async def get_index():
     return FileResponse(index_path)
 
 @app.post("/api/connect4")
-async def play_connect4(req: Connect4Request):
+async def play_connect4(req: Connect4Request, request: Request):
+    # 1. DoS Rate Limit check
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
+
     # Verify binaries exist
     bin_path = MC_BIN if req.mode == "cuda_mc" else SOLVER_BIN
     if not os.path.exists(bin_path):
         return {"error": f"Executable not found at {bin_path}. Please build the project in Release mode."}
+
+    # 2. Prevent DoS by capping parameters
+    simulations = min(max(1000, req.simulations), 1000000)
+    threads = min(max(32, req.threads), 512)
 
     # Setup command
     if req.mode == "cuda_mc":
@@ -59,8 +81,8 @@ async def play_connect4(req: Connect4Request):
             bin_path,
             "--moves", req.moves,
             "--once",
-            "--simulations-per-move", str(req.simulations),
-            "--threads", str(req.threads),
+            "--simulations-per-move", str(simulations),
+            "--threads", str(threads),
             "--seed", "12345"
         ]
     else: # cpu_solver
@@ -140,19 +162,28 @@ async def play_connect4(req: Connect4Request):
         return {"error": f"Server error: {str(e)}"}
 
 @app.post("/api/gomoku")
-async def play_gomoku(req: GomokuRequest):
+async def play_gomoku(req: GomokuRequest, request: Request):
+    # 1. DoS Rate Limit check
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
+
     # Verify binaries exist
     bin_path = GOMOKU_MC_BIN if req.mode == "cuda_mc" else GOMOKU_SOLVER_BIN
     if not os.path.exists(bin_path):
         return {"error": f"Executable not found at {bin_path}. Please build the project."}
+
+    # 2. Prevent DoS by capping parameters
+    simulations = min(max(100, req.simulations), 20000)
+    threads = min(max(32, req.threads), 512)
 
     # Setup command
     if req.mode == "cuda_mc":
         cmd = [
             bin_path,
             "--moves", req.moves,
-            "--simulations-per-move", str(req.simulations),
-            "--threads", str(req.threads),
+            "--simulations-per-move", str(simulations),
+            "--threads", str(threads),
             "--seed", "12345"
         ]
     else: # cpu_solver
