@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(cuda_monte_four LANGUAGES CXX)
 
 include(CheckLanguage)
+include(CTest)
 
 option(BUILD_CUDA "Build CUDA Monte Carlo executable when a CUDA compiler is available" ON)
 
@@ -66,3 +67,9 @@ target_link_libraries(monte_carlo_cpu PRIVATE connect4_board)
 
 add_executable(gomoku_solver_cpu src/gomoku_solver_cpu.cpp)
 target_link_libraries(gomoku_solver_cpu PRIVATE gomoku_board)
+
+if(BUILD_TESTING)
+    add_executable(gomoku_board_tests tests/gomoku_board_tests.cpp)
+    target_link_libraries(gomoku_board_tests PRIVATE gomoku_board)
+    add_test(NAME gomoku_board_tests COMMAND gomoku_board_tests)
+endif()

@@ -42,6 +42,39 @@ GOMOKU_HOST_DEVICE inline int find_first_bit(const GomokuBits& b) {
     return -1;
 }
 
+GOMOKU_HOST_DEVICE inline bool has_exact_five(const GomokuBits& stones, int last_idx) {
+    if (last_idx < 0 || last_idx >= 225) return false;
+
+    const int r = last_idx / 15;
+    const int c = last_idx % 15;
+    if (!get_bit(stones, r, c)) return false;
+
+    constexpr int dr[4] = {0, 1, 1, -1};
+    constexpr int dc[4] = {1, 0, 1, 1};
+
+    for (int d = 0; d < 4; ++d) {
+        int count = 1;
+
+        for (int step = 1; step < 15; ++step) {
+            const int nr = r + dr[d] * step;
+            const int nc = c + dc[d] * step;
+            if (nr < 0 || nr >= 15 || nc < 0 || nc >= 15 || !get_bit(stones, nr, nc)) break;
+            ++count;
+        }
+
+        for (int step = 1; step < 15; ++step) {
+            const int nr = r - dr[d] * step;
+            const int nc = c - dc[d] * step;
+            if (nr < 0 || nr >= 15 || nc < 0 || nc >= 15 || !get_bit(stones, nr, nc)) break;
+            ++count;
+        }
+
+        if (count == 5) return true;
+    }
+
+    return false;
+}
+
 GOMOKU_HOST_DEVICE inline void get_winning_cells(const GomokuBits& stones, const GomokuBits& empty, GomokuBits& wins) {
     clear_bits(wins);
 

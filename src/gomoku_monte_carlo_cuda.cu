@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,50 +28,6 @@ struct XORShift {
     }
 };
 
-__device__ bool device_has_five(const std::uint8_t* cells, int last_idx) {
-    const int r = last_idx / 15;
-    const int c = last_idx % 15;
-
-    constexpr int dr[4] = {0, 1, 1, -1};
-    constexpr int dc[4] = {1, 0, 1, 1};
-
-    const std::uint8_t color = cells[last_idx];
-
-    for (int d = 0; d < 4; ++d) {
-        int count = 1;
-
-        // Positive direction
-        for (int step = 1; step < 5; ++step) {
-            const int nr = r + dr[d] * step;
-            const int nc = c + dc[d] * step;
-            if (nr < 0 || nr >= 15 || nc < 0 || nc >= 15) break;
-            if (cells[nr * 15 + nc] == color) {
-                ++count;
-            } else {
-                break;
-            }
-        }
-
-        // Negative direction
-        for (int step = 1; step < 5; ++step) {
-            const int nr = r - dr[d] * step;
-            const int nc = c - dc[d] * step;
-            if (nr < 0 || nr >= 15 || nc < 0 || nc >= 15) break;
-            if (cells[nr * 15 + nc] == color) {
-                ++count;
-            } else {
-                break;
-            }
-        }
-
-        if (count == 5) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 __global__ void playout_kernel(
     const std::uint8_t* init_cells,
     int init_moves,
@@ -81,16 +38,15 @@ __global__ void playout_kernel(
     unsigned int seed,
     int* win_counts // [draws, black_wins, white_wins]
 ) {
-    __shared__ int s_draws[256];
-    __shared__ int s_black[256];
-    __shared__ int s_white[256];
+    __shared__ int s_counts[3];
 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int local_tid = threadIdx.x;
 
-    s_draws[local_tid] = 0;
-    s_black[local_tid] = 0;
-    s_white[local_tid] = 0;
+    for (int i = local_tid; i < 3; i += blockDim.x) {
+        s_counts[i] = 0;
+    }
+    __syncthreads();
 
     int outcome = -1; // -1 = running, 0 = draw, 1 = black, 2 = white
 
@@ -111,8 +67,8 @@ __global__ void playout_kernel(
         }
 
         int last_move = candidate_r * 15 + candidate_c;
-        if (init_side == 1) gomoku::set_bit(black_stones, candidate_r, candidate_c);
-        else gomoku::set_bit(white_stones, candidate_r, candidate_c);
+        gomoku::GomokuBits& candidate_stones = (init_side == 1) ? black_stones : white_stones;
+        gomoku::set_bit(candidate_stones, candidate_r, candidate_c);
 
         for (int i = 0; i < 225; ++i) {
             int r = i / 15;
@@ -125,7 +81,7 @@ __global__ void playout_kernel(
         std::uint8_t side = (init_side == 1) ? 2 : 1;
         int moves = init_moves + 1;
 
-        if (device_has_five(init_cells, last_move)) { // fallback to verify the first move
+        if (gomoku::has_exact_five(candidate_stones, last_move)) {
             outcome = init_side;
         } else if (moves >= 225) {
             outcome = 0;
@@ -179,33 +135,28 @@ __global__ void playout_kernel(
                 gomoku::set_bit(my_stones, play_idx / 15, play_idx % 15);
                 empty.rows[play_idx / 15] &= ~(1 << (play_idx % 15));
 
+                if (gomoku::has_exact_five(my_stones, play_idx)) {
+                    outcome = side;
+                    break;
+                }
+
                 side = (side == 1) ? 2 : 1;
                 ++moves;
             }
             if (outcome == -1) outcome = 0;
         }
 
-        if (outcome == 0) s_draws[local_tid] = 1;
-        else if (outcome == 1) s_black[local_tid] = 1;
-        else if (outcome == 2) s_white[local_tid] = 1;
+        if (outcome >= 0 && outcome <= 2) {
+            atomicAdd(&s_counts[outcome], 1);
+        }
     }
 
     __syncthreads();
 
-    // Block level reduction
-    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
-        if (local_tid < stride) {
-            s_draws[local_tid] += s_draws[local_tid + stride];
-            s_black[local_tid] += s_black[local_tid + stride];
-            s_white[local_tid] += s_white[local_tid + stride];
-        }
-        __syncthreads();
-    }
-
     if (local_tid == 0) {
-        atomicAdd(&win_counts[0], s_draws[0]);
-        atomicAdd(&win_counts[1], s_black[0]);
-        atomicAdd(&win_counts[2], s_white[0]);
+        atomicAdd(&win_counts[0], s_counts[0]);
+        atomicAdd(&win_counts[1], s_counts[1]);
+        atomicAdd(&win_counts[2], s_counts[2]);
     }
 }
 
@@ -290,21 +241,58 @@ Options parse_args(int argc, char** argv) {
     return options;
 }
 
+void check_cuda(cudaError_t error, const char* label) {
+    if (error != cudaSuccess) {
+        throw std::runtime_error(std::string(label) + ": " + cudaGetErrorString(error));
+    }
+}
+
+void validate_thread_count(int threads) {
+    int device = 0;
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, device), "cudaGetDeviceProperties");
+    if (threads > properties.maxThreadsPerBlock) {
+        throw std::runtime_error(
+            "--threads exceeds this GPU's maxThreadsPerBlock (" +
+            std::to_string(properties.maxThreadsPerBlock) + ")");
+    }
+}
+
+void apply_moves(gomoku::Board& board, const std::vector<std::string>& moves) {
+    for (const std::string& move : moves) {
+        if (gomoku::check_outcome(board) != gomoku::Outcome::Unknown) {
+            throw std::runtime_error("--moves continues after a terminal position");
+        }
+
+        const std::size_t underscore = move.find('_');
+        if (underscore == std::string::npos || underscore == 0 ||
+            underscore + 1 >= move.size() || move.find('_', underscore + 1) != std::string::npos) {
+            throw std::runtime_error("each Gomoku move must use row_col format");
+        }
+
+        std::size_t row_chars = 0;
+        std::size_t col_chars = 0;
+        const int row = std::stoi(move.substr(0, underscore), &row_chars);
+        const int col = std::stoi(move.substr(underscore + 1), &col_chars);
+        if (row_chars != underscore || col_chars != move.size() - underscore - 1 ||
+            !gomoku::play_inline(board, row, col)) {
+            throw std::runtime_error("illegal move in --moves: " + move);
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     try {
         Options options = parse_args(argc, argv);
-        gomoku::Board board;
-
-        for (const auto& m : options.moves) {
-            size_t underscore = m.find('_');
-            if (underscore != std::string::npos) {
-                int r = std::atoi(m.substr(0, underscore).c_str());
-                int c = std::atoi(m.substr(underscore + 1).c_str());
-                gomoku::play_inline(board, r, c);
-            }
+        if (options.simulations <= 0 || options.threads <= 0) {
+            throw std::runtime_error("--simulations-per-move and --threads must be positive");
         }
+
+        gomoku::Board board;
+        apply_moves(board, options.moves);
 
         std::vector<MoveCandidate> candidates = get_candidates(board);
         if (candidates.empty()) {
@@ -353,13 +341,21 @@ int main(int argc, char** argv) {
             return 0;
         }
 
+        validate_thread_count(options.threads);
+
         // CUDA Allocations
         std::uint8_t* d_cells = nullptr;
-        cudaMalloc(&d_cells, 225);
-        cudaMemcpy(d_cells, board.cells, 225, cudaMemcpyHostToDevice);
+        check_cuda(cudaMalloc(&d_cells, gomoku::kCells * sizeof(std::uint8_t)), "cudaMalloc cells");
+        check_cuda(
+            cudaMemcpy(
+                d_cells,
+                board.cells,
+                gomoku::kCells * sizeof(std::uint8_t),
+                cudaMemcpyHostToDevice),
+            "copy cells");
 
         int* d_win_counts = nullptr;
-        cudaMalloc(&d_win_counts, 3 * sizeof(int));
+        check_cuda(cudaMalloc(&d_win_counts, 3 * sizeof(int)), "cudaMalloc counts");
 
         const auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -374,7 +370,9 @@ int main(int argc, char** argv) {
 
             // Reset win counts on device
             int h_win_counts[3] = {0, 0, 0};
-            cudaMemcpy(d_win_counts, h_win_counts, 3 * sizeof(int), cudaMemcpyHostToDevice);
+            check_cuda(
+                cudaMemcpy(d_win_counts, h_win_counts, 3 * sizeof(int), cudaMemcpyHostToDevice),
+                "zero counts");
 
             int blocks = (options.simulations + options.threads - 1) / options.threads;
 
@@ -388,11 +386,13 @@ int main(int argc, char** argv) {
                 options.seed + idx * 8129,
                 d_win_counts
             );
-            cudaDeviceSynchronize();
+            check_cuda(cudaGetLastError(), "kernel launch");
+            check_cuda(cudaDeviceSynchronize(), "kernel sync");
 
-            cudaMemcpy(h_win_counts, d_win_counts, 3 * sizeof(int), cudaMemcpyDeviceToHost);
+            check_cuda(
+                cudaMemcpy(h_win_counts, d_win_counts, 3 * sizeof(int), cudaMemcpyDeviceToHost),
+                "copy counts");
 
-            int draws = h_win_counts[0];
             int black_wins = h_win_counts[1];
             int white_wins = h_win_counts[2];
 
@@ -448,8 +448,8 @@ int main(int argc, char** argv) {
         std::cout << "best_move " << best_r << "_" << best_c << '\n';
         std::cout << "duration " << duration << '\n';
 
-        cudaFree(d_cells);
-        cudaFree(d_win_counts);
+        check_cuda(cudaFree(d_cells), "free cells");
+        check_cuda(cudaFree(d_win_counts), "free counts");
 
     } catch (const std::exception& ex) {
         std::cerr << "Error: " << ex.what() << '\n';

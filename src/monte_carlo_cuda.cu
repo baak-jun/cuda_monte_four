@@ -216,6 +216,18 @@ void check_cuda(cudaError_t error, const char* label) {
     }
 }
 
+void validate_thread_count(int threads) {
+    int device = 0;
+    cudaDeviceProp properties{};
+    check_cuda(cudaGetDevice(&device), "cudaGetDevice");
+    check_cuda(cudaGetDeviceProperties(&properties, device), "cudaGetDeviceProperties");
+    if (threads > properties.maxThreadsPerBlock) {
+        throw std::runtime_error(
+            "--threads exceeds this GPU's maxThreadsPerBlock (" +
+            std::to_string(properties.maxThreadsPerBlock) + ")");
+    }
+}
+
 int parse_int_arg(int argc, char** argv, const std::string& name, int fallback) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (argv[i] == name) {
@@ -231,9 +243,10 @@ std::vector<int> parse_moves(int argc, char** argv) {
         if (std::string(argv[i]) == "--moves" && i + 1 < argc) {
             const std::string text = argv[++i];
             for (char ch : text) {
-                if (ch >= '0' && ch <= '6') {
-                    moves.push_back(ch - '0');
+                if (ch < '0' || ch > '6') {
+                    throw std::runtime_error("--moves must contain only columns 0..6");
                 }
+                moves.push_back(ch - '0');
             }
         }
     }
@@ -273,6 +286,7 @@ int main(int argc, char** argv) {
             std::cout << "terminal=" << connect4::outcome_name(already_done) << "\n";
             return 0;
         }
+        validate_thread_count(threads);
 
         DeviceBoard start{
             host_board.black,
@@ -287,9 +301,19 @@ int main(int argc, char** argv) {
         check_cuda(cudaMemcpy(device_counts, &zero, sizeof(Counts), cudaMemcpyHostToDevice), "cudaMemcpy H2D");
 
         const int blocks = (simulations + threads - 1) / threads;
+        cudaEvent_t kernel_start = nullptr;
+        cudaEvent_t kernel_stop = nullptr;
+        check_cuda(cudaEventCreate(&kernel_start), "cudaEventCreate start");
+        check_cuda(cudaEventCreate(&kernel_stop), "cudaEventCreate stop");
+        check_cuda(cudaEventRecord(kernel_start), "cudaEventRecord start");
         monte_carlo_kernel<<<blocks, threads>>>(start, simulations, static_cast<std::uint32_t>(seed), device_counts);
         check_cuda(cudaGetLastError(), "kernel launch");
-        check_cuda(cudaDeviceSynchronize(), "kernel sync");
+        check_cuda(cudaEventRecord(kernel_stop), "cudaEventRecord stop");
+        check_cuda(cudaEventSynchronize(kernel_stop), "kernel sync");
+        float kernel_ms = 0.0F;
+        check_cuda(cudaEventElapsedTime(&kernel_ms, kernel_start, kernel_stop), "cudaEventElapsedTime");
+        check_cuda(cudaEventDestroy(kernel_start), "cudaEventDestroy start");
+        check_cuda(cudaEventDestroy(kernel_stop), "cudaEventDestroy stop");
 
         Counts counts{};
         check_cuda(cudaMemcpy(&counts, device_counts, sizeof(Counts), cudaMemcpyDeviceToHost), "cudaMemcpy D2H");
@@ -299,6 +323,7 @@ int main(int argc, char** argv) {
         std::cout << "black_wins=" << counts.black_wins << "\n";
         std::cout << "white_wins=" << counts.white_wins << "\n";
         std::cout << "draws=" << counts.draws << "\n";
+        std::cout << "kernel_ms=" << kernel_ms << "\n";
         std::cout << "black_rate=" << static_cast<double>(counts.black_wins) / simulations << "\n";
         std::cout << "white_rate=" << static_cast<double>(counts.white_wins) / simulations << "\n";
         std::cout << "draw_rate=" << static_cast<double>(counts.draws) / simulations << "\n";

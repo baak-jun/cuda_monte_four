@@ -8,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,10 +28,10 @@ int evaluate_board(const gomoku::Board& board) {
     int score = 0;
 
     // Helper to score a window of 5 cells
-    auto score_window = [](int black, int white) -> int {
+    auto score_window = [](int black, int white, std::uint8_t before, std::uint8_t after) -> int {
         if (black > 0 && white > 0) return 0;
-        if (black == 5) return kWinScore;
-        if (white == 5) return -kWinScore;
+        if (black == 5) return before == 1 || after == 1 ? 0 : kWinScore;
+        if (white == 5) return before == 2 || after == 2 ? 0 : -kWinScore;
 
         if (black == 4) return 5000;
         if (white == 4) return -5000;
@@ -56,7 +57,10 @@ int evaluate_board(const gomoku::Board& board) {
                 if (val == 1) ++black;
                 else if (val == 2) ++white;
             }
-            score += score_window(black, white);
+            const std::uint8_t before = c > 0 ? board.cells[r * gomoku::kCols + c - 1] : 0;
+            const std::uint8_t after =
+                c + 5 < gomoku::kCols ? board.cells[r * gomoku::kCols + c + 5] : 0;
+            score += score_window(black, white, before, after);
         }
     }
 
@@ -69,7 +73,10 @@ int evaluate_board(const gomoku::Board& board) {
                 if (val == 1) ++black;
                 else if (val == 2) ++white;
             }
-            score += score_window(black, white);
+            const std::uint8_t before = r > 0 ? board.cells[(r - 1) * gomoku::kCols + c] : 0;
+            const std::uint8_t after =
+                r + 5 < gomoku::kRows ? board.cells[(r + 5) * gomoku::kCols + c] : 0;
+            score += score_window(black, white, before, after);
         }
     }
 
@@ -82,7 +89,13 @@ int evaluate_board(const gomoku::Board& board) {
                 if (val == 1) ++black;
                 else if (val == 2) ++white;
             }
-            score += score_window(black, white);
+            const std::uint8_t before =
+                r > 0 && c > 0 ? board.cells[(r - 1) * gomoku::kCols + c - 1] : 0;
+            const std::uint8_t after =
+                r + 5 < gomoku::kRows && c + 5 < gomoku::kCols
+                    ? board.cells[(r + 5) * gomoku::kCols + c + 5]
+                    : 0;
+            score += score_window(black, white, before, after);
         }
     }
 
@@ -95,7 +108,15 @@ int evaluate_board(const gomoku::Board& board) {
                 if (val == 1) ++black;
                 else if (val == 2) ++white;
             }
-            score += score_window(black, white);
+            const std::uint8_t before =
+                r + 1 < gomoku::kRows && c > 0
+                    ? board.cells[(r + 1) * gomoku::kCols + c - 1]
+                    : 0;
+            const std::uint8_t after =
+                r >= 5 && c + 5 < gomoku::kCols
+                    ? board.cells[(r - 5) * gomoku::kCols + c + 5]
+                    : 0;
+            score += score_window(black, white, before, after);
         }
     }
 
@@ -246,22 +267,40 @@ Options parse_args(int argc, char** argv) {
     return options;
 }
 
+void apply_moves(gomoku::Board& board, const std::vector<std::string>& moves) {
+    for (const std::string& move : moves) {
+        if (gomoku::check_outcome(board) != gomoku::Outcome::Unknown) {
+            throw std::runtime_error("--moves continues after a terminal position");
+        }
+
+        const std::size_t underscore = move.find('_');
+        if (underscore == std::string::npos || underscore == 0 ||
+            underscore + 1 >= move.size() || move.find('_', underscore + 1) != std::string::npos) {
+            throw std::runtime_error("each Gomoku move must use row_col format");
+        }
+
+        std::size_t row_chars = 0;
+        std::size_t col_chars = 0;
+        const int row = std::stoi(move.substr(0, underscore), &row_chars);
+        const int col = std::stoi(move.substr(underscore + 1), &col_chars);
+        if (row_chars != underscore || col_chars != move.size() - underscore - 1 ||
+            !gomoku::play_inline(board, row, col)) {
+            throw std::runtime_error("illegal move in --moves: " + move);
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     try {
         Options options = parse_args(argc, argv);
-        gomoku::Board board;
-
-        // Populate board from moves
-        for (const auto& m : options.moves) {
-            size_t underscore = m.find('_');
-            if (underscore != std::string::npos) {
-                int r = std::atoi(m.substr(0, underscore).c_str());
-                int c = std::atoi(m.substr(underscore + 1).c_str());
-                gomoku::play_inline(board, r, c);
-            }
+        if (options.max_depth < 0) {
+            throw std::runtime_error("--max-depth must be non-negative");
         }
+
+        gomoku::Board board;
+        apply_moves(board, options.moves);
 
         const auto start_time = std::chrono::high_resolution_clock::now();
         int best_r = -1, best_c = -1;
@@ -271,7 +310,12 @@ int main(int argc, char** argv) {
         const auto end_time = std::chrono::high_resolution_clock::now();
         const double duration = std::chrono::duration<double>(end_time - start_time).count();
 
-        std::cout << "result " << (score > 100000 ? "black_win" : (score < -100000 ? "white_win" : "draw")) << '\n';
+        const int proven_win_threshold = kWinScore - gomoku::kMaxMoves;
+        const char* result =
+            score >= proven_win_threshold
+                ? "black_win"
+                : (score <= -proven_win_threshold ? "white_win" : "unknown");
+        std::cout << "result " << result << '\n';
         std::cout << "score " << score << '\n';
         if (best_r != -1 && best_c != -1) {
             std::cout << "best_move " << best_r << "_" << best_c << '\n';

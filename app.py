@@ -10,6 +10,11 @@ import re
 from collections import defaultdict
 import json
 from datetime import datetime
+import mimetypes
+
+mimetypes.init()
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 app = FastAPI(title="AI Board Game Server")
 

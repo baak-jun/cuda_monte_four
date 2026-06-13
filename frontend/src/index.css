@@ -29,6 +29,13 @@ body {
     padding-bottom: 40px;
 }
 
+#root {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 /* Main wrapper container to align with React DOM structure */
 .main-wrapper-container {
     width: 100%;
@@ -256,6 +263,7 @@ select:disabled {
 .board-c4 {
     width: 100%;
     max-width: 550px;
+    aspect-ratio: 7 / 6.3; /* Secure layout height proportional to width */
     background: rgba(26, 54, 93, 0.85); /* Deep Blue */
     border: 2px solid rgba(49, 130, 206, 0.3);
     border-radius: 20px;
@@ -271,6 +279,7 @@ select:disabled {
 .board-gomoku {
     width: 100%;
     max-width: 620px;
+    aspect-ratio: 1; /* Secure square layout height proportional to width */
     background: #d69e2e; /* Classic wood color */
     border: 5px solid #b7791f;
     border-radius: 8px;
@@ -355,14 +364,30 @@ select:disabled {
 }
 
 .stats-box {
-    font-size: 13px;
+    font-size: 11.5px;
     color: var(--text-muted);
     background: rgba(10, 14, 23, 0.3);
     border-radius: 10px;
     padding: 12px;
-    font-family: monospace;
-    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, SF Pro Mono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: pre;
+    overflow-x: auto;
     border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.stats-box::-webkit-scrollbar {
+    height: 6px;
+}
+.stats-box::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+.stats-box::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+.stats-box::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* Mobile Responsive Styles */

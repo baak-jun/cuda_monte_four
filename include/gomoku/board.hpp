@@ -54,7 +54,7 @@ inline bool play_inline(Board& board, int r, int c) {
     return true;
 }
 
-// Optimized 5-in-a-row check around the last move (O(1) complexity)
+// Exact-five rule: overlines (six or more contiguous stones) are not wins.
 inline bool has_five(const Board& board, int last_idx) {
     if (last_idx < 0 || last_idx >= kCells) return false;
     const std::uint8_t color = board.cells[last_idx];
@@ -71,7 +71,7 @@ inline bool has_five(const Board& board, int last_idx) {
         int count = 1;
 
         // Positive direction
-        for (int step = 1; step < 5; ++step) {
+        for (int step = 1; step < kRows; ++step) {
             const int nr = r + dr[d] * step;
             const int nc = c + dc[d] * step;
             if (nr < 0 || nr >= kRows || nc < 0 || nc >= kCols) break;
@@ -83,7 +83,7 @@ inline bool has_five(const Board& board, int last_idx) {
         }
 
         // Negative direction
-        for (int step = 1; step < 5; ++step) {
+        for (int step = 1; step < kRows; ++step) {
             const int nr = r - dr[d] * step;
             const int nc = c - dc[d] * step;
             if (nr < 0 || nr >= kRows || nc < 0 || nc >= kCols) break;

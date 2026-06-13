@@ -16,6 +16,10 @@ The bit index is `row + col * 7`; row `0` is the bottom of a column and col is `
 - `solver_cpu`: memoized minimax solver keyed by `(black, white, side_to_move)`.
 - `perfect_solver_cpu`: negamax/alpha-beta solver for forced win/loss/draw and best move.
 - `perfect_db_cpu`: persistent exact minimax DB builder/query tool for preprocessing.
+- `gomoku_solver_cpu`: limited-depth Gomoku alpha-beta search.
+- `gomoku_monte_carlo_cuda`: CUDA Gomoku rollout evaluator.
+
+Gomoku uses the exact-five rule throughout the CPU, CUDA, and web implementations: exactly five contiguous stones win, while an overline of six or more does not.
 
 ## Build
 
