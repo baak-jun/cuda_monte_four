@@ -63,6 +63,8 @@ export const App: React.FC = () => {
   const [statsOutput, setStatsOutput] = useState<string>('대기 중...');
   const [clientIpv4, setClientIpv4] = useState<string>('');
 
+  console.log("AI Game Portal initialized.");
+
   // Fetch client IPv4 on load
   useEffect(() => {
     async function fetchIp() {
