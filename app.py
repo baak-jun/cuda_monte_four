@@ -24,10 +24,19 @@ BIN_DIR = os.path.join(PROJECT_DIR, "build", "Release")
 MC_BIN = os.path.join(BIN_DIR, "play_monte_carlo_cuda.exe")
 SOLVER_BIN = os.path.join(BIN_DIR, "perfect_solver_cpu.exe")
 
+GOMOKU_MC_BIN = os.path.join(BIN_DIR, "gomoku_monte_carlo_cuda.exe")
+GOMOKU_SOLVER_BIN = os.path.join(BIN_DIR, "gomoku_solver_cpu.exe")
+
 class Connect4Request(BaseModel):
     moves: str
     mode: str  # "cuda_mc" or "cpu_solver"
     simulations: int = 1000000
+    threads: int = 256
+
+class GomokuRequest(BaseModel):
+    moves: str
+    mode: str  # "cuda_mc" or "cpu_solver"
+    simulations: int = 10000
     threads: int = 256
 
 @app.get("/")
@@ -127,5 +136,83 @@ async def play_connect4(req: Connect4Request):
 
     except subprocess.TimeoutExpired:
         return {"error": "AI solver timed out (limit: 60s)."}
+    except Exception as e:
+        return {"error": f"Server error: {str(e)}"}
+
+@app.post("/api/gomoku")
+async def play_gomoku(req: GomokuRequest):
+    # Verify binaries exist
+    bin_path = GOMOKU_MC_BIN if req.mode == "cuda_mc" else GOMOKU_SOLVER_BIN
+    if not os.path.exists(bin_path):
+        return {"error": f"Executable not found at {bin_path}. Please build the project."}
+
+    # Setup command
+    if req.mode == "cuda_mc":
+        cmd = [
+            bin_path,
+            "--moves", req.moves,
+            "--simulations-per-move", str(req.simulations),
+            "--threads", str(req.threads),
+            "--seed", "12345"
+        ]
+    else: # cpu_solver
+        cmd = [
+            bin_path,
+            "--moves", req.moves,
+            "--max-depth", "4"
+        ]
+
+    start_time = time.perf_counter()
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+        duration = time.perf_counter() - start_time
+        
+        if res.returncode != 0:
+            return {"error": f"Process exited with code {res.returncode}. Error: {res.stderr}"}
+            
+        stdout = res.stdout
+        print(f"Gomoku Stdout:\n{stdout}")
+        
+        # Parse best move (e.g., best_move 8_9)
+        best_move = "-1_-1"
+        match_move = re.search(r"best_move\s+(\d+_\d+)", stdout)
+        if match_move:
+            best_move = match_move.group(1)
+            
+        outcome = "unknown"
+        match_res = re.search(r"result\s+(\w+)", stdout)
+        if match_res:
+            outcome = match_res.group(1)
+            if outcome == "black_win":
+                outcome = "black wins"
+            elif outcome == "white_win":
+                outcome = "white wins"
+
+        extra_info = ""
+        lines = stdout.splitlines()
+        if req.mode == "cuda_mc":
+            rates_start = -1
+            for idx, line in enumerate(lines):
+                if "win rates for candidates" in line:
+                    rates_start = idx
+                    break
+            if rates_start != -1:
+                extra_info = "\n".join(lines[rates_start:rates_start+8])
+        else: # cpu_solver
+            info_parts = []
+            for line in lines:
+                if any(x in line for x in ["result", "score", "nodes", "duration"]):
+                    info_parts.append(line)
+            extra_info = "\n".join(info_parts)
+
+        return {
+            "best_move": best_move,
+            "outcome": outcome,
+            "duration_sec": duration,
+            "extra_info": extra_info
+        }
+
+    except subprocess.TimeoutExpired:
+        return {"error": "Gomoku AI solver timed out (limit: 60s)."}
     except Exception as e:
         return {"error": f"Server error: {str(e)}"}

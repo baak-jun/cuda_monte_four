@@ -379,8 +379,8 @@
                 <div class="setting-group">
                     <label class="setting-label">Gomoku AI Mode</label>
                     <select id="gomoku-mode">
-                        <option value="heuristic">Heuristic Pattern AI</option>
-                        <option value="random">Random Playout AI</option>
+                        <option value="cuda_mc">GPU Monte Carlo AI (RTX 4070)</option>
+                        <option value="cpu_solver" selected>CPU Alpha-Beta Heuristic AI</option>
                     </select>
                 </div>
             </div>
@@ -643,65 +643,67 @@
             updateTurnIndicator();
             
             isWaitingForAi = true;
-            setTimeout(() => {
-                getGomokuAiMove();
-            }, 600); // Add a small delay for natural feeling
+            getGomokuAiMove();
         }
 
-        function getGomokuAiMove() {
-            // Since we are setting up the structure first, we use a simple Heuristic Gomoku AI inside the browser
-            // Find all empty cells
-            let emptyCells = [];
-            for (let r = 0; r < 15; r++) {
-                for (let c = 0; c < 15; c++) {
-                    if (boardState[r][c] === 0) {
-                        emptyCells.push({r, c});
+        async function getGomokuAiMove() {
+            const mode = document.getElementById('gomoku-mode').value;
+            
+            try {
+                const host = window.location.protocol === 'file:' ? 'http://127.0.0.1:8889' : '';
+                const response = await fetch(host + '/api/gomoku', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        moves: moves,
+                        mode: mode,
+                        simulations: 10000,
+                        threads: 256
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('에러 발생: ' + data.error);
+                    isWaitingForAi = false;
+                    sideToMove = 'black';
+                    updateTurnIndicator();
+                    return;
+                }
+                
+                // Display stats
+                document.getElementById('stats-output').innerText = 
+                    `[Gomoku AI 연산 완료]\n소요 시간: ${data.duration_sec.toFixed(4)}s\n` +
+                    (data.extra_info ? data.extra_info : '');
+
+                // Apply AI move
+                if (data.best_move !== undefined && data.best_move !== "-1_-1") {
+                    moves = moves ? moves + ',' + data.best_move : data.best_move;
+                }
+                
+                // Check if game ended
+                if (data.outcome && data.outcome !== 'unknown') {
+                    document.getElementById('game-status-label').innerText = data.outcome.toUpperCase();
+                    if (data.outcome.includes('win')) {
+                        document.getElementById('game-status-label').style.color = '#ecc94b';
+                    } else {
+                        document.getElementById('game-status-label').style.color = '#e53e3e';
                     }
                 }
-            }
-            
-            if (emptyCells.length === 0) {
-                alert('더 이상 둘 곳이 없습니다!');
+                
+                sideToMove = 'black';
+                isWaitingForAi = false;
+                renderBoard();
+                updateTurnIndicator();
+                
+            } catch (err) {
+                console.error(err);
+                alert('서버 연결 실패. app.py가 실행 중인지 확인하세요.');
                 isWaitingForAi = false;
                 sideToMove = 'black';
                 updateTurnIndicator();
-                return;
             }
-            
-            // Heuristic selection: try to place stone near existing stones, or select randomly
-            let selectedMove = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-            
-            // Simple logic: find cell that is adjacent to existing stones
-            for (let cell of emptyCells) {
-                let hasAdjacent = false;
-                for (let dr = -1; dr <= 1; dr++) {
-                    for (let dc = -1; dc <= 1; dc++) {
-                        let nr = cell.r + dr;
-                        let nc = cell.c + dc;
-                        if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
-                            if (boardState[nr][nc] !== 0) {
-                                hasAdjacent = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (hasAdjacent) break;
-                }
-                if (hasAdjacent && Math.random() < 0.7) {
-                    selectedMove = cell;
-                    break;
-                }
-            }
-            
-            const moveCoord = `${selectedMove.r}_${selectedMove.c}`;
-            moves = moves ? moves + ',' + moveCoord : moveCoord;
-            
-            document.getElementById('stats-output').innerText = `[Gomoku Local AI]\n웹 브라우저 내부 패턴 휴리스틱 연산 완료.`;
-            
-            sideToMove = 'black';
-            isWaitingForAi = false;
-            renderBoard();
-            updateTurnIndicator();
         }
 
         // Initialize board on load

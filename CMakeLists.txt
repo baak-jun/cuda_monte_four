@@ -14,6 +14,9 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 add_library(connect4_board INTERFACE)
 target_include_directories(connect4_board INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+add_library(gomoku_board INTERFACE)
+target_include_directories(gomoku_board INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
 if(BUILD_CUDA)
     check_language(CUDA)
     if(CMAKE_CUDA_COMPILER)
@@ -33,6 +36,12 @@ if(BUILD_CUDA)
         add_executable(perfect_frontier_cuda src/perfect_frontier_cuda.cu)
         target_link_libraries(perfect_frontier_cuda PRIVATE connect4_board)
         set_target_properties(perfect_frontier_cuda PROPERTIES
+            CUDA_SEPARABLE_COMPILATION ON
+            CUDA_ARCHITECTURES native)
+
+        add_executable(gomoku_monte_carlo_cuda src/gomoku_monte_carlo_cuda.cu)
+        target_link_libraries(gomoku_monte_carlo_cuda PRIVATE gomoku_board)
+        set_target_properties(gomoku_monte_carlo_cuda PROPERTIES
             CUDA_SEPARABLE_COMPILATION ON
             CUDA_ARCHITECTURES native)
     else()
@@ -55,3 +64,5 @@ target_link_libraries(perfect_db_cpu PRIVATE connect4_board)
 add_executable(monte_carlo_cpu src/monte_carlo_cpu.cpp)
 target_link_libraries(monte_carlo_cpu PRIVATE connect4_board)
 
+add_executable(gomoku_solver_cpu src/gomoku_solver_cpu.cpp)
+target_link_libraries(gomoku_solver_cpu PRIVATE gomoku_board)
