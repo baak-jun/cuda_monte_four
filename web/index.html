@@ -486,6 +486,21 @@
         let isWaitingForAi = false;
         let isGameOver = false;
         let boardState = []; // 6x7 for c4, 15x15 for gomoku
+        let clientIpv4 = '';
+
+        // Fetch client's public IPv4 address asynchronously on load
+        async function fetchClientIpv4() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                if (data.ip) {
+                    clientIpv4 = data.ip;
+                }
+            } catch (err) {
+                console.warn('Failed to fetch client IPv4:', err);
+            }
+        }
+        fetchClientIpv4();
 
         async function sendGameLog(outcome) {
             const mode = currentGame === 'connect4' 
@@ -501,7 +516,8 @@
                         game: currentGame,
                         mode: mode,
                         outcome: outcome,
-                        moves: moves
+                        moves: moves,
+                        client_ipv4: clientIpv4
                     })
                 });
             } catch (err) {

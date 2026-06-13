@@ -16,6 +16,9 @@ app = FastAPI(title="AI Board Game Server")
 ip_request_history = defaultdict(list)
 
 def get_client_ip(request: Request) -> str:
+    pseudo_ip = request.headers.get("cf-pseudo-ipv4")
+    if pseudo_ip:
+        return pseudo_ip
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip:
         return cf_ip
@@ -267,6 +270,7 @@ class LogRequest(BaseModel):
     mode: str
     outcome: str
     moves: str
+    client_ipv4: str = ""
 
 @app.post("/api/log")
 async def log_game(req: LogRequest, request: Request):
@@ -275,9 +279,12 @@ async def log_game(req: LogRequest, request: Request):
         raise HTTPException(status_code=429, detail="Too many requests.")
         
     timestamp = datetime.now().isoformat()
+    display_ip = req.client_ipv4 if req.client_ipv4 else client_ip
+    
     log_entry = {
         "timestamp": timestamp,
-        "client_ip": client_ip,
+        "client_ip": display_ip,
+        "raw_connection_ip": client_ip,
         "game": req.game,
         "mode": req.mode,
         "outcome": req.outcome,

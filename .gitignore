@@ -21,4 +21,7 @@ docs/
 # Local config or python venv if any
 .env
 venv/
-.venv/
+
+# Local game logs
+game_logs.jsonl
+*.jsonl
