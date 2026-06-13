@@ -487,6 +487,28 @@
         let isGameOver = false;
         let boardState = []; // 6x7 for c4, 15x15 for gomoku
 
+        async function sendGameLog(outcome) {
+            const mode = currentGame === 'connect4' 
+                ? document.getElementById('c4-mode').value 
+                : document.getElementById('gomoku-mode').value;
+                
+            try {
+                const host = window.location.protocol === 'file:' ? 'http://127.0.0.1:8889' : '';
+                await fetch(host + '/api/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game: currentGame,
+                        mode: mode,
+                        outcome: outcome,
+                        moves: moves
+                    })
+                });
+            } catch (err) {
+                console.warn('Log transmission failed:', err);
+            }
+        }
+
         function switchGame(gameType) {
             if (isWaitingForAi) return;
             currentGame = gameType;
@@ -674,6 +696,26 @@
                 
                 const text = document.getElementById('turn-status-text');
                 text.innerText = '게임 종료 (' + (winner === 1 ? '흑돌 승리' : '백돌 승리') + ')';
+                
+                sendGameLog(winner === 1 ? 'black_win' : 'white_win');
+            } else {
+                let isDraw = false;
+                if (currentGame === 'connect4' && moves.length === 42) {
+                    isDraw = true;
+                } else if (currentGame === 'gomoku' && moves.split(',').length === 225 && moves !== '') {
+                    isDraw = true;
+                }
+                
+                if (isDraw) {
+                    document.getElementById('game-status-label').innerText = 'DRAW';
+                    document.getElementById('game-status-label').style.color = '#a0aec0';
+                    isGameOver = true;
+                    
+                    const text = document.getElementById('turn-status-text');
+                    text.innerText = '게임 종료 (무승부)';
+                    
+                    sendGameLog('draw');
+                }
             }
         }
 

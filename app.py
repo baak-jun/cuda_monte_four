@@ -7,11 +7,25 @@ import time
 import os
 import re
 from collections import defaultdict
+import json
+from datetime import datetime
 
 app = FastAPI(title="AI Board Game Server")
 
 # Simple in-memory rate limiter: max 20 requests per minute per IP
 ip_request_history = defaultdict(list)
+
+def get_client_ip(request: Request) -> str:
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip
+    return request.client.host
 
 def check_rate_limit(client_ip: str) -> bool:
     now = time.time()
@@ -62,7 +76,7 @@ async def get_index():
 @app.post("/api/connect4")
 async def play_connect4(req: Connect4Request, request: Request):
     # 1. DoS Rate Limit check
-    client_ip = request.client.host
+    client_ip = get_client_ip(request)
     if not check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
 
@@ -164,7 +178,7 @@ async def play_connect4(req: Connect4Request, request: Request):
 @app.post("/api/gomoku")
 async def play_gomoku(req: GomokuRequest, request: Request):
     # 1. DoS Rate Limit check
-    client_ip = request.client.host
+    client_ip = get_client_ip(request)
     if not check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many requests. Please wait a minute.")
 
@@ -247,3 +261,33 @@ async def play_gomoku(req: GomokuRequest, request: Request):
         return {"error": "Gomoku AI solver timed out (limit: 60s)."}
     except Exception as e:
         return {"error": f"Server error: {str(e)}"}
+
+class LogRequest(BaseModel):
+    game: str
+    mode: str
+    outcome: str
+    moves: str
+
+@app.post("/api/log")
+async def log_game(req: LogRequest, request: Request):
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests.")
+        
+    timestamp = datetime.now().isoformat()
+    log_entry = {
+        "timestamp": timestamp,
+        "client_ip": client_ip,
+        "game": req.game,
+        "mode": req.mode,
+        "outcome": req.outcome,
+        "moves": req.moves
+    }
+    
+    log_file_path = os.path.join(PROJECT_DIR, "game_logs.jsonl")
+    try:
+        with open(log_file_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        return {"status": "success"}
+    except Exception as e:
+        return {"error": f"Failed to write log: {str(e)}"}
