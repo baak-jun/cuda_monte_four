@@ -16,9 +16,44 @@ export const App: React.FC = () => {
   const [sideToMove, setSideToMove] = useState<SideToMove>('black');
   const [isWaitingForAi, setIsWaitingForAi] = useState<boolean>(false);
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
-  const [boardState, setBoardState] = useState<BoardState>([]);
   const [winner, setWinner] = useState<number>(0);
   const [isDraw, setIsDraw] = useState<boolean>(false);
+
+  // Derive Board State synchronously during render to prevent layout height collapsing
+  const isC4 = game === 'connect4';
+  const boardRows = isC4 ? 6 : 15;
+  const boardCols = isC4 ? 7 : 15;
+  const boardState: BoardState = Array(boardRows)
+    .fill(null)
+    .map(() => Array(boardCols).fill(0));
+
+  if (isC4) {
+    let turn = 1; // 1 = black (human), 2 = white (ai)
+    for (let i = 0; i < moves.length; i++) {
+      const col = parseInt(moves[i]);
+      if (!isNaN(col) && col >= 0 && col < 7) {
+        for (let r = 5; r >= 0; r--) {
+          if (boardState[r][col] === 0) {
+            boardState[r][col] = turn;
+            break;
+          }
+        }
+      }
+      turn = turn === 1 ? 2 : 1;
+    }
+  } else {
+    if (moves) {
+      const moveList = moves.split(',');
+      let turn = 1;
+      moveList.forEach((m) => {
+        const [r, c] = m.split('_').map((x) => parseInt(x));
+        if (!isNaN(r) && !isNaN(c) && r >= 0 && r < 15 && c >= 0 && c < 15) {
+          boardState[r][c] = turn;
+          turn = turn === 1 ? 2 : 1;
+        }
+      });
+    }
+  }
 
   // Settings
   const [c4Mode, setC4Mode] = useState<string>('cuda_mc');
@@ -49,23 +84,23 @@ export const App: React.FC = () => {
     document.body.className = `game-${game}`;
   }, [game]);
 
-  // Compute Board State and Check Win/Draw on moves change
+  // Check Win/Draw on moves or game change
   useEffect(() => {
-    const isC4 = game === 'connect4';
-    const rows = isC4 ? 6 : 15;
-    const cols = isC4 ? 7 : 15;
-    const newBoard: BoardState = Array(rows)
+    const isC4Active = game === 'connect4';
+    const rows = isC4Active ? 6 : 15;
+    const cols = isC4Active ? 7 : 15;
+    const tempBoard: BoardState = Array(rows)
       .fill(null)
       .map(() => Array(cols).fill(0));
 
-    if (isC4) {
-      let turn = 1; // 1 = black (human), 2 = white (ai)
+    if (isC4Active) {
+      let turn = 1;
       for (let i = 0; i < moves.length; i++) {
         const col = parseInt(moves[i]);
         if (!isNaN(col) && col >= 0 && col < 7) {
           for (let r = 5; r >= 0; r--) {
-            if (newBoard[r][col] === 0) {
-              newBoard[r][col] = turn;
+            if (tempBoard[r][col] === 0) {
+              tempBoard[r][col] = turn;
               break;
             }
           }
@@ -79,22 +114,19 @@ export const App: React.FC = () => {
         moveList.forEach((m) => {
           const [r, c] = m.split('_').map((x) => parseInt(x));
           if (!isNaN(r) && !isNaN(c) && r >= 0 && r < 15 && c >= 0 && c < 15) {
-            newBoard[r][c] = turn;
+            tempBoard[r][c] = turn;
             turn = turn === 1 ? 2 : 1;
           }
         });
       }
     }
 
-    setBoardState(newBoard);
-
-    // Check game termination conditions
-    const gameWinner = isC4 ? checkC4Win(newBoard) : checkGomokuWin(newBoard);
+    const gameWinner = isC4Active ? checkC4Win(tempBoard) : checkGomokuWin(tempBoard);
     if (gameWinner !== 0) {
       setWinner(gameWinner);
       setIsGameOver(true);
       setIsWaitingForAi(false);
-      const activeMode = isC4 ? c4Mode : gomokuMode;
+      const activeMode = isC4Active ? c4Mode : gomokuMode;
       sendGameLog(
         game,
         activeMode,
@@ -106,9 +138,9 @@ export const App: React.FC = () => {
     }
 
     let isGameDraw = false;
-    if (isC4 && moves.length === 42) {
+    if (isC4Active && moves.length === 42) {
       isGameDraw = true;
-    } else if (!isC4 && moves !== '' && moves.split(',').length === 225) {
+    } else if (!isC4Active && moves !== '' && moves.split(',').length === 225) {
       isGameDraw = true;
     }
 
@@ -116,7 +148,7 @@ export const App: React.FC = () => {
       setIsDraw(true);
       setIsGameOver(true);
       setIsWaitingForAi(false);
-      const activeMode = isC4 ? c4Mode : gomokuMode;
+      const activeMode = isC4Active ? c4Mode : gomokuMode;
       sendGameLog(game, activeMode, 'draw', moves, clientIpv4);
     }
   }, [moves, game, clientIpv4, c4Mode, gomokuMode]);

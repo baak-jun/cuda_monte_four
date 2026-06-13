@@ -256,6 +256,7 @@ select:disabled {
 .board-c4 {
     width: 100%;
     max-width: 550px;
+    aspect-ratio: 7 / 6.3; /* Secure layout height proportional to width */
     background: rgba(26, 54, 93, 0.85); /* Deep Blue */
     border: 2px solid rgba(49, 130, 206, 0.3);
     border-radius: 20px;
@@ -271,6 +272,7 @@ select:disabled {
 .board-gomoku {
     width: 100%;
     max-width: 620px;
+    aspect-ratio: 1; /* Secure square layout height proportional to width */
     background: #d69e2e; /* Classic wood color */
     border: 5px solid #b7791f;
     border-radius: 8px;
