@@ -1,0 +1,130 @@
+{
+    "mc_thread_scaling": [
+        {
+            "threads": 64,
+            "duration_sec": 0.12906809999791827,
+            "sims_per_sec": 77478478.41690774
+        },
+        {
+            "threads": 128,
+            "duration_sec": 0.12158749999798601,
+            "sims_per_sec": 82245296.59846318
+        },
+        {
+            "threads": 256,
+            "duration_sec": 0.12532003333520456,
+            "sims_per_sec": 79795701.72353943
+        },
+        {
+            "threads": 512,
+            "duration_sec": 0.12235743333440041,
+            "sims_per_sec": 81727768.61598755
+        },
+        {
+            "threads": 1024,
+            "duration_sec": 0.12593830000211406,
+            "sims_per_sec": 79403962.0975679
+        }
+    ],
+    "cpu_vs_hybrid": [
+        {
+            "depth": 10,
+            "cpu": {
+                "duration_sec": 0.03314680000039516,
+                "nodes": 21871,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": 0.1569318000038038,
+                "nodes": 19608,
+                "gpu_leaves": 16807,
+                "timeout": false
+            }
+        },
+        {
+            "depth": 11,
+            "cpu": {
+                "duration_sec": 0.022325799996906426,
+                "nodes": 117817,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": 0.2413767000034568,
+                "nodes": 19608,
+                "gpu_leaves": 16807,
+                "timeout": false
+            }
+        },
+        {
+            "depth": 12,
+            "cpu": {
+                "duration_sec": 0.03384669999650214,
+                "nodes": 168862,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": 0.4882272999966517,
+                "nodes": 19608,
+                "gpu_leaves": 16807,
+                "timeout": false
+            }
+        },
+        {
+            "depth": 13,
+            "cpu": {
+                "duration_sec": 0.08176319999620318,
+                "nodes": 929598,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": 2.252338799997233,
+                "nodes": 19608,
+                "gpu_leaves": 16807,
+                "timeout": false
+            }
+        },
+        {
+            "depth": 14,
+            "cpu": {
+                "duration_sec": 0.1811708000022918,
+                "nodes": 1290704,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": 6.493678299993917,
+                "nodes": 19608,
+                "gpu_leaves": 16807,
+                "timeout": false
+            }
+        },
+        {
+            "depth": 15,
+            "cpu": {
+                "duration_sec": 0.5311068000009982,
+                "nodes": 6223555,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": null,
+                "nodes": 0,
+                "gpu_leaves": 0,
+                "timeout": true
+            }
+        },
+        {
+            "depth": 16,
+            "cpu": {
+                "duration_sec": 1.8211298000023817,
+                "nodes": 8404648,
+                "timeout": false
+            },
+            "hybrid": {
+                "duration_sec": null,
+                "nodes": 0,
+                "gpu_leaves": 0,
+                "timeout": true
+            }
+        }
+    ],
+    "frontier_depth_tuning": []
+}

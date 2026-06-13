@@ -69,7 +69,9 @@ __device__ std::uint32_t xorshift32(std::uint32_t& state) {
     return state;
 }
 
-__device__ int random_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
+
+
+__device__ int heuristic_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
     int legal[connect4::kCols];
     int count = 0;
     for (int col = 0; col < connect4::kCols; ++col) {
@@ -80,6 +82,29 @@ __device__ int random_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
     if (count == 0) {
         return -1;
     }
+
+    // 1. Immediate win check for active player
+    std::uint64_t my_stones = (board.side_to_move == 0) ? board.black : board.white;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = column_height_device(board, col);
+        std::uint64_t bit = bit_at_device(row, col);
+        if (has_four_device(my_stones | bit)) {
+            return col;
+        }
+    }
+
+    // 2. Block opponent's immediate win
+    std::uint64_t opp_stones = (board.side_to_move == 0) ? board.white : board.black;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = column_height_device(board, col);
+        std::uint64_t bit = bit_at_device(row, col);
+        if (has_four_device(opp_stones | bit)) {
+            return col;
+        }
+    }
+
     return legal[xorshift32(rng) % count];
 }
 
@@ -104,7 +129,7 @@ __device__ connect4::Outcome rollout(DeviceBoard board, std::uint32_t& rng) {
             return connect4::Outcome::WhiteWin;
         }
 
-        const int col = random_legal_move(board, rng);
+        const int col = heuristic_legal_move(board, rng);
         if (col < 0) {
             break;
         }
@@ -122,20 +147,49 @@ __device__ connect4::Outcome rollout(DeviceBoard board, std::uint32_t& rng) {
 
 __global__ void monte_carlo_kernel(DeviceBoard start, int simulations, std::uint32_t seed, Counts* counts) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= simulations) {
-        return;
+    
+    // Shared memory for block-level accumulation
+    __shared__ unsigned long long s_black_wins;
+    __shared__ unsigned long long s_white_wins;
+    __shared__ unsigned long long s_draws;
+    
+    if (threadIdx.x == 0) {
+        s_black_wins = 0;
+        s_white_wins = 0;
+        s_draws = 0;
     }
-
-    std::uint32_t rng = seed ^ (0x9E3779B9U * (idx + 1));
-    const connect4::Outcome outcome = rollout(start, rng);
-    if (outcome == connect4::Outcome::BlackWin) {
-        atomicAdd(&counts->black_wins, 1ULL);
-    } else if (outcome == connect4::Outcome::WhiteWin) {
-        atomicAdd(&counts->white_wins, 1ULL);
-    } else {
-        atomicAdd(&counts->draws, 1ULL);
+    __syncthreads();
+    
+    unsigned long long my_black = 0;
+    unsigned long long my_white = 0;
+    unsigned long long my_draw = 0;
+    
+    if (idx < simulations) {
+        std::uint32_t rng = seed ^ (0x9E3779B9U * (idx + 1));
+        const connect4::Outcome outcome = rollout(start, rng);
+        if (outcome == connect4::Outcome::BlackWin) {
+            my_black = 1;
+        } else if (outcome == connect4::Outcome::WhiteWin) {
+            my_white = 1;
+        } else {
+            my_draw = 1;
+        }
+    }
+    
+    // Add block-level atomicAdd to shared memory
+    if (my_black) atomicAdd(&s_black_wins, 1ULL);
+    if (my_white) atomicAdd(&s_white_wins, 1ULL);
+    if (my_draw)  atomicAdd(&s_draws, 1ULL);
+    __syncthreads();
+    
+    // Add block-level sums to the global counters once per block
+    if (threadIdx.x == 0) {
+        if (s_black_wins > 0) atomicAdd(&counts->black_wins, s_black_wins);
+        if (s_white_wins > 0) atomicAdd(&counts->white_wins, s_white_wins);
+        if (s_draws > 0)      atomicAdd(&counts->draws, s_draws);
     }
 }
+
 
 void check_cuda(cudaError_t error, const char* label) {
     if (error != cudaSuccess) {

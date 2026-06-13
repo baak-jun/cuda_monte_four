@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# C++ Build artifacts
+build/
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# Exclude reports and documents
+docs/
+*.docx
+*.hwpx
+~$*
+
+# Screenshots or local test files in root
+*.png
+
+# Local config or python venv if any
+.env
+venv/
+
+# Local game logs
+game_logs.jsonl
+*.jsonl
