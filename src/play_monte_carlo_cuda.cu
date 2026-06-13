@@ -79,7 +79,7 @@ __device__ std::uint32_t xorshift32(std::uint32_t& state) {
     return state;
 }
 
-__device__ int random_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
+__device__ int heuristic_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
     int legal[connect4::kCols];
     int count = 0;
     for (int col = 0; col < connect4::kCols; ++col) {
@@ -90,6 +90,29 @@ __device__ int random_legal_move(const DeviceBoard& board, std::uint32_t& rng) {
     if (count == 0) {
         return -1;
     }
+
+    // 1. Immediate win check for active player
+    std::uint64_t my_stones = (board.side_to_move == 0) ? board.black : board.white;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = column_height_device(board, col);
+        std::uint64_t bit = bit_at_device(row, col);
+        if (has_four_device(my_stones | bit)) {
+            return col;
+        }
+    }
+
+    // 2. Block opponent's immediate win
+    std::uint64_t opp_stones = (board.side_to_move == 0) ? board.white : board.black;
+    for (int i = 0; i < count; ++i) {
+        int col = legal[i];
+        int row = column_height_device(board, col);
+        std::uint64_t bit = bit_at_device(row, col);
+        if (has_four_device(opp_stones | bit)) {
+            return col;
+        }
+    }
+
     return legal[xorshift32(rng) % count];
 }
 
@@ -114,7 +137,7 @@ __device__ connect4::Outcome rollout(DeviceBoard board, std::uint32_t& rng) {
             return connect4::Outcome::WhiteWin;
         }
 
-        const int col = random_legal_move(board, rng);
+        const int col = heuristic_legal_move(board, rng);
         if (col < 0) {
             break;
         }
@@ -138,24 +161,52 @@ __global__ void evaluate_kernel(
     Counts* counts) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     const int total = candidates * simulations_per_candidate;
-    if (idx >= total) {
-        return;
+    
+    // Shared memory for candidate counters in this block (max 7 candidates)
+    __shared__ unsigned long long s_black_wins[7];
+    __shared__ unsigned long long s_white_wins[7];
+    __shared__ unsigned long long s_draws[7];
+    
+    if (threadIdx.x < 7) {
+        s_black_wins[threadIdx.x] = 0;
+        s_white_wins[threadIdx.x] = 0;
+        s_draws[threadIdx.x] = 0;
     }
-
-    const int candidate = idx / simulations_per_candidate;
-    const int sim = idx - candidate * simulations_per_candidate;
-    std::uint32_t rng = seed ^ (0x9E3779B9U * (idx + 1)) ^ (0x85EBCA6BU * (candidate + 17));
-    rng ^= static_cast<std::uint32_t>(starts[candidate].black + starts[candidate].white + sim);
-
-    const connect4::Outcome outcome = rollout(starts[candidate], rng);
-    if (outcome == connect4::Outcome::BlackWin) {
-        atomicAdd(&counts[candidate].black_wins, 1ULL);
-    } else if (outcome == connect4::Outcome::WhiteWin) {
-        atomicAdd(&counts[candidate].white_wins, 1ULL);
-    } else {
-        atomicAdd(&counts[candidate].draws, 1ULL);
+    __syncthreads();
+    
+    int my_candidate = -1;
+    connect4::Outcome outcome = connect4::Outcome::Unknown;
+    
+    if (idx < total) {
+        my_candidate = idx / simulations_per_candidate;
+        const int sim = idx - my_candidate * simulations_per_candidate;
+        std::uint32_t rng = seed ^ (0x9E3779B9U * (idx + 1)) ^ (0x85EBCA6BU * (my_candidate + 17));
+        rng ^= static_cast<std::uint32_t>(starts[my_candidate].black + starts[my_candidate].white + sim);
+        
+        outcome = rollout(starts[my_candidate], rng);
+    }
+    
+    // Accumulate locally using block-level atomicAdd to shared memory
+    if (my_candidate >= 0) {
+        if (outcome == connect4::Outcome::BlackWin) {
+            atomicAdd(&s_black_wins[my_candidate], 1ULL);
+        } else if (outcome == connect4::Outcome::WhiteWin) {
+            atomicAdd(&s_white_wins[my_candidate], 1ULL);
+        } else {
+            atomicAdd(&s_draws[my_candidate], 1ULL);
+        }
+    }
+    __syncthreads();
+    
+    // Write back block totals to global memory once per block
+    if (threadIdx.x < 7 && threadIdx.x < candidates) {
+        const int c = threadIdx.x;
+        if (s_black_wins[c] > 0) atomicAdd(&counts[c].black_wins, s_black_wins[c]);
+        if (s_white_wins[c] > 0) atomicAdd(&counts[c].white_wins, s_white_wins[c]);
+        if (s_draws[c] > 0)      atomicAdd(&counts[c].draws, s_draws[c]);
     }
 }
+
 
 void check_cuda(cudaError_t error, const char* label) {
     if (error != cudaSuccess) {

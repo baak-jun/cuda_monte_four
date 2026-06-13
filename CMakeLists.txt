@@ -51,3 +51,7 @@ target_link_libraries(perfect_solver_cpu PRIVATE connect4_board)
 
 add_executable(perfect_db_cpu src/perfect_db_cpu.cpp)
 target_link_libraries(perfect_db_cpu PRIVATE connect4_board)
+
+add_executable(monte_carlo_cpu src/monte_carlo_cpu.cpp)
+target_link_libraries(monte_carlo_cpu PRIVATE connect4_board)
+

@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Board Game Portal (Connect 4 & Gomoku)</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at 50% 50%, #1a202c 0%, #0a0e17 100%);
+            --panel-bg: rgba(26, 32, 44, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #3182ce;
+            --primary-glow: rgba(49, 130, 206, 0.4);
+            --accent-red: #e53e3e;
+            --accent-red-glow: rgba(229, 62, 62, 0.4);
+            --accent-gold: #ecc94b;
+            --text-main: #f7fafc;
+            --text-muted: #a0aec0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            padding-bottom: 40px;
+        }
+
+        header {
+            width: 100%;
+            padding: 30px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(10, 14, 23, 0.5);
+            backdrop-filter: blur(10px);
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 24px;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #63b3ed 0%, #3182ce 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .game-selector {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-select {
+            padding: 10px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .btn-select.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .btn-select:hover:not(.active) {
+            color: white;
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .main-container {
+            display: flex;
+            gap: 30px;
+            max-width: 1200px;
+            width: 90%;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* Sidebar settings panel */
+        .settings-panel {
+            width: 350px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 30px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .settings-title {
+            font-weight: 600;
+            font-size: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .setting-label {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        select, input {
+            padding: 12px;
+            background: rgba(10, 14, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: white;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-action {
+            padding: 14px;
+            border-radius: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .btn-reset {
+            background: rgba(229, 62, 62, 0.2);
+            color: var(--accent-red);
+            border: 1px solid rgba(229, 62, 62, 0.4);
+            box-shadow: none;
+        }
+
+        .btn-reset:hover {
+            background: var(--accent-red);
+            color: white;
+            box-shadow: 0 6px 20px var(--accent-red-glow);
+        }
+
+        /* Game board wrapper */
+        .game-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-bar {
+            width: 100%;
+            max-width: 550px;
+            background: rgba(10, 14, 23, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .status-turn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .turn-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .turn-dot.black {
+            background: radial-gradient(circle at 30% 30%, #4a5568, #1a202c);
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+        }
+
+        .turn-dot.white {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #cbd5e0);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+        }
+
+        /* Connect 4 Board */
+        .board-c4 {
+            width: 550px;
+            max-width: 100%;
+            background: rgba(26, 54, 93, 0.85); /* Deep Blue */
+            border: 2px solid rgba(49, 130, 206, 0.3);
+            border-radius: 20px;
+            padding: 15px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-gap: 12px;
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(49, 130, 206, 0.15);
+            position: relative;
+        }
+
+        /* Gomoku Board */
+        .board-gomoku {
+            width: 620px;
+            max-width: 100%;
+            background: #d69e2e; /* Classic wood color */
+            border: 5px solid #b7791f;
+            border-radius: 8px;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            grid-gap: 2px;
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6);
+            position: relative;
+        }
+
+        .cell-c4 {
+            aspect-ratio: 1;
+            background: #0d121f;
+            border-radius: 50%;
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.8);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .cell-c4:hover {
+            background: #161e33;
+        }
+
+        .cell-gomoku {
+            aspect-ratio: 1;
+            background: #eab308;
+            border: 1px solid #b7791f;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .cell-gomoku:hover::after {
+            content: '';
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            top: 25%;
+            left: 25%;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        /* Stones rendering */
+        .stone {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            border-radius: 50%;
+            animation: dropAnim 0.45s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .stone.black {
+            background: radial-gradient(circle at 35% 35%, #4a5568 0%, #11141a 70%, #000000 100%);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), inset 0 -2px 5px rgba(0,0,0,0.8);
+        }
+
+        .stone.white {
+            background: radial-gradient(circle at 35% 35%, #ffffff 0%, #e2e8f0 60%, #cbd5e0 100%);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 -2px 4px rgba(0,0,0,0.2);
+        }
+
+        @keyframes dropAnim {
+            0% {
+                transform: translateY(-400px);
+                opacity: 0;
+            }
+            60% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .stats-box {
+            font-size: 13px;
+            color: var(--text-muted);
+            background: rgba(10, 14, 23, 0.3);
+            border-radius: 10px;
+            padding: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">AI GAME PLATFORM</div>
+        <div class="game-selector">
+            <button class="btn-select active" onclick="switchGame('connect4')">Connect Four (사목)</button>
+            <button class="btn-select" onclick="switchGame('gomoku')">Gomoku (오목)</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <div class="settings-title" id="panel-title">Connect Four Settings</div>
+            
+            <div id="c4-settings" class="setting-group" style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="setting-group">
+                    <label class="setting-label">AI 난이도 / 모델</label>
+                    <select id="c4-mode">
+                        <option value="cuda_mc">GPU Monte Carlo AI (RTX 4070)</option>
+                        <option value="cpu_solver">CPU Negamax Perfect AI (수 읽기)</option>
+                    </select>
+                </div>
+                
+                <div class="setting-group">
+                    <label class="setting-label">GPU 시뮬레이션 수</label>
+                    <select id="c4-simulations">
+                        <option value="100000">100,000 simulations (초고속)</option>
+                        <option value="1000000" selected>1,000,000 simulations (기본)</option>
+                        <option value="10000000">10,000,000 simulations (최고지능)</option>
+                    </select>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">CUDA 스레드 수</label>
+                    <select id="c4-threads">
+                        <option value="128">128 threads</option>
+                        <option value="256" selected>256 threads</option>
+                        <option value="512">512 threads</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="gomoku-settings" class="setting-group" style="display: none; flex-direction: column; gap: 20px;">
+                <div class="setting-group">
+                    <label class="setting-label">Gomoku AI Mode</label>
+                    <select id="gomoku-mode">
+                        <option value="heuristic">Heuristic Pattern AI</option>
+                        <option value="random">Random Playout AI</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">AI 연산 정보</label>
+                <div class="stats-box" id="stats-output">대기 중...</div>
+            </div>
+
+            <button class="btn-action btn-reset" onclick="resetGame()">게임 초기화</button>
+        </div>
+
+        <!-- Game Screen -->
+        <div class="game-wrapper">
+            <div class="status-bar">
+                <div class="status-turn">
+                    <div class="turn-dot black" id="turn-color-dot"></div>
+                    <span id="turn-status-text">당신의 턴 (흑돌)</span>
+                </div>
+                <div id="game-status-label">진행 중</div>
+            </div>
+            
+            <div id="board-container">
+                <!-- Grid will be rendered dynamically here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentGame = 'connect4';
+        let moves = '';
+        let sideToMove = 'black'; // 'black' (human) or 'white' (computer)
+        let isWaitingForAi = false;
+        let boardState = []; // 6x7 for c4, 15x15 for gomoku
+
+        function switchGame(gameType) {
+            if (isWaitingForAi) return;
+            currentGame = gameType;
+            
+            document.querySelectorAll('.btn-select').forEach(btn => btn.classList.remove('active'));
+            if (gameType === 'connect4') {
+                document.querySelector('.btn-select:nth-child(1)').classList.add('active');
+                document.getElementById('c4-settings').style.display = 'flex';
+                document.getElementById('gomoku-settings').style.display = 'none';
+                document.getElementById('panel-title').innerText = 'Connect Four Settings';
+            } else {
+                document.querySelector('.btn-select:nth-child(2)').classList.add('active');
+                document.getElementById('c4-settings').style.display = 'none';
+                document.getElementById('gomoku-settings').style.display = 'flex';
+                document.getElementById('panel-title').innerText = 'Gomoku Settings';
+            }
+            resetGame();
+        }
+
+        function resetGame() {
+            moves = '';
+            sideToMove = 'black';
+            isWaitingForAi = false;
+            document.getElementById('stats-output').innerText = '대기 중...';
+            document.getElementById('game-status-label').innerText = '진행 중';
+            document.getElementById('game-status-label').style.color = '#a0aec0';
+            updateTurnIndicator();
+            renderBoard();
+        }
+
+        function updateTurnIndicator() {
+            const dot = document.getElementById('turn-color-dot');
+            const text = document.getElementById('turn-status-text');
+            
+            dot.className = 'turn-dot ' + sideToMove;
+            if (sideToMove === 'black') {
+                text.innerText = '당신의 턴 (흑돌)';
+            } else {
+                text.innerText = 'AI 연산 중... (백돌)';
+            }
+        }
+
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+            
+            if (currentGame === 'connect4') {
+                // Connect 4 Grid (6 rows, 7 cols)
+                const boardDiv = document.createElement('div');
+                boardDiv.className = 'board-c4';
+                
+                // Initialize board state: 6 rows of 7 empty elements (0 = empty, 1 = black, 2 = white)
+                boardState = Array(6).fill().map(() => Array(7).fill(0));
+                
+                // Populating state from moves string
+                let turn = 1; // 1 = black, 2 = white
+                for (let i = 0; i < moves.length; i++) {
+                    const col = parseInt(moves[i]);
+                    // Find lowest empty row in col
+                    for (let r = 5; r >= 0; r--) {
+                        if (boardState[r][col] === 0) {
+                            boardState[r][col] = turn;
+                            break;
+                        }
+                    }
+                    turn = turn === 1 ? 2 : 1;
+                }
+                
+                // Render cells
+                for (let r = 0; r < 6; r++) {
+                    for (let c = 0; c < 7; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell-c4';
+                        cell.onclick = () => handleC4Click(c);
+                        
+                        const state = boardState[r][c];
+                        if (state === 1) {
+                            const stone = document.createElement('div');
+                            stone.className = 'stone black';
+                            cell.appendChild(stone);
+                        } else if (state === 2) {
+                            const stone = document.createElement('div');
+                            stone.className = 'stone white';
+                            cell.appendChild(stone);
+                        }
+                        
+                        boardDiv.appendChild(cell);
+                    }
+                }
+                container.appendChild(boardDiv);
+                
+            } else {
+                // Gomoku Grid (15x15)
+                const boardDiv = document.createElement('div');
+                boardDiv.className = 'board-gomoku';
+                
+                boardState = Array(15).fill().map(() => Array(15).fill(0));
+                
+                // Populating Gomoku state
+                // In Gomoku, moves string stores comma-separated coordinates: e.g. "7_7,8_8,..."
+                if (moves) {
+                    const moveList = moves.split(',');
+                    let turn = 1;
+                    moveList.forEach(m => {
+                        const [r, c] = m.split('_').map(x => parseInt(x));
+                        if (!isNaN(r) && !isNaN(c)) {
+                            boardState[r][c] = turn;
+                            turn = turn === 1 ? 2 : 1;
+                        }
+                    });
+                }
+                
+                for (let r = 0; r < 15; r++) {
+                    for (let c = 0; c < 15; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell-gomoku';
+                        cell.onclick = () => handleGomokuClick(r, c);
+                        
+                        const state = boardState[r][c];
+                        if (state === 1) {
+                            const stone = document.createElement('div');
+                            stone.className = 'stone black';
+                            cell.appendChild(stone);
+                        } else if (state === 2) {
+                            const stone = document.createElement('div');
+                            stone.className = 'stone white';
+                            cell.appendChild(stone);
+                        }
+                        
+                        boardDiv.appendChild(cell);
+                    }
+                }
+                container.appendChild(boardDiv);
+            }
+        }
+
+        async function handleC4Click(col) {
+            if (isWaitingForAi || sideToMove !== 'black') return;
+            
+            // Check if col is full
+            if (boardState[0][col] !== 0) return;
+            
+            // Player move
+            moves += col;
+            sideToMove = 'white';
+            renderBoard();
+            updateTurnIndicator();
+            
+            // Trigger AI
+            isWaitingForAi = true;
+            await getC4AiMove();
+        }
+
+        async function getC4AiMove() {
+            const mode = document.getElementById('c4-mode').value;
+            const simulations = document.getElementById('c4-simulations').value;
+            const threads = document.getElementById('c4-threads').value;
+            
+            try {
+                const host = window.location.protocol === 'file:' ? 'http://127.0.0.1:8889' : '';
+                const response = await fetch(host + '/api/connect4', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        moves: moves,
+                        mode: mode,
+                        simulations: parseInt(simulations),
+                        threads: parseInt(threads)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('에러 발생: ' + data.error);
+                    isWaitingForAi = false;
+                    sideToMove = 'black';
+                    updateTurnIndicator();
+                    return;
+                }
+                
+                // Display stats
+                document.getElementById('stats-output').innerText = 
+                    `[AI 연산 완료]\n소요 시간: ${data.duration_sec.toFixed(4)}s\n` +
+                    (data.extra_info ? data.extra_info : '');
+
+                // Apply AI move
+                if (data.best_move !== undefined && data.best_move >= 0) {
+                    moves += data.best_move;
+                }
+                
+                // Check if game ended
+                if (data.outcome && data.outcome !== 'unknown') {
+                    document.getElementById('game-status-label').innerText = data.outcome.toUpperCase();
+                    if (data.outcome.includes('win')) {
+                        document.getElementById('game-status-label').style.color = '#ecc94b';
+                    } else {
+                        document.getElementById('game-status-label').style.color = '#e53e3e';
+                    }
+                }
+                
+                sideToMove = 'black';
+                isWaitingForAi = false;
+                renderBoard();
+                updateTurnIndicator();
+                
+            } catch (err) {
+                console.error(err);
+                alert('서버 연결 실패. app.py가 실행 중인지 확인하세요.');
+                isWaitingForAi = false;
+                sideToMove = 'black';
+                updateTurnIndicator();
+            }
+        }
+
+        // --- Gomoku logic ---
+        function handleGomokuClick(row, col) {
+            if (isWaitingForAi || sideToMove !== 'black') return;
+            if (boardState[row][col] !== 0) return;
+            
+            const moveCoord = `${row}_${col}`;
+            moves = moves ? moves + ',' + moveCoord : moveCoord;
+            sideToMove = 'white';
+            renderBoard();
+            updateTurnIndicator();
+            
+            isWaitingForAi = true;
+            setTimeout(() => {
+                getGomokuAiMove();
+            }, 600); // Add a small delay for natural feeling
+        }
+
+        function getGomokuAiMove() {
+            // Since we are setting up the structure first, we use a simple Heuristic Gomoku AI inside the browser
+            // Find all empty cells
+            let emptyCells = [];
+            for (let r = 0; r < 15; r++) {
+                for (let c = 0; c < 15; c++) {
+                    if (boardState[r][c] === 0) {
+                        emptyCells.push({r, c});
+                    }
+                }
+            }
+            
+            if (emptyCells.length === 0) {
+                alert('더 이상 둘 곳이 없습니다!');
+                isWaitingForAi = false;
+                sideToMove = 'black';
+                updateTurnIndicator();
+                return;
+            }
+            
+            // Heuristic selection: try to place stone near existing stones, or select randomly
+            let selectedMove = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            
+            // Simple logic: find cell that is adjacent to existing stones
+            for (let cell of emptyCells) {
+                let hasAdjacent = false;
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        let nr = cell.r + dr;
+                        let nc = cell.c + dc;
+                        if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                            if (boardState[nr][nc] !== 0) {
+                                hasAdjacent = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hasAdjacent) break;
+                }
+                if (hasAdjacent && Math.random() < 0.7) {
+                    selectedMove = cell;
+                    break;
+                }
+            }
+            
+            const moveCoord = `${selectedMove.r}_${selectedMove.c}`;
+            moves = moves ? moves + ',' + moveCoord : moveCoord;
+            
+            document.getElementById('stats-output').innerText = `[Gomoku Local AI]\n웹 브라우저 내부 패턴 휴리스틱 연산 완료.`;
+            
+            sideToMove = 'black';
+            isWaitingForAi = false;
+            renderBoard();
+            updateTurnIndicator();
+        }
+
+        // Initialize board on load
+        resetGame();
+    </script>
+</body>
+</html>
