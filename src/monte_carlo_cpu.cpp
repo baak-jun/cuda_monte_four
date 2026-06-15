@@ -4,6 +4,9 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "connect4/board.hpp"
 
 namespace {
@@ -117,18 +120,33 @@ int main(int argc, char** argv) {
         std::uint64_t white_wins = 0;
         std::uint64_t draws = 0;
 
+        int num_threads = 1;
+        #pragma omp parallel
+        {
+            #pragma omp single
+            {
+#ifdef _OPENMP
+                num_threads = omp_get_num_threads();
+#endif
+            }
+        }
+
         auto start_time = std::chrono::high_resolution_clock::now();
         
         std::uint32_t rng_state = seed;
-        for (int idx = 0; idx < simulations; ++idx) {
-            std::uint32_t rng = rng_state ^ (0x9E3779B9U * (idx + 1));
-            connect4::Outcome outcome = rollout(start_board, rng);
-            if (outcome == connect4::Outcome::BlackWin) {
-                black_wins++;
-            } else if (outcome == connect4::Outcome::WhiteWin) {
-                white_wins++;
-            } else {
-                draws++;
+        #pragma omp parallel reduction(+:black_wins, white_wins, draws)
+        {
+            #pragma omp for
+            for (int idx = 0; idx < simulations; ++idx) {
+                std::uint32_t rng = rng_state ^ (0x9E3779B9U * (idx + 1));
+                connect4::Outcome outcome = rollout(start_board, rng);
+                if (outcome == connect4::Outcome::BlackWin) {
+                    black_wins++;
+                } else if (outcome == connect4::Outcome::WhiteWin) {
+                    white_wins++;
+                } else {
+                    draws++;
+                }
             }
         }
         
@@ -136,6 +154,7 @@ int main(int argc, char** argv) {
         std::chrono::duration<double> duration = end_time - start_time;
         
         std::cout << "simulations=" << simulations << "\n";
+        std::cout << "threads=" << num_threads << "\n";
         std::cout << "black_wins=" << black_wins << "\n";
         std::cout << "white_wins=" << white_wins << "\n";
         std::cout << "draws=" << draws << "\n";

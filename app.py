@@ -54,7 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PROJECT_DIR = r"C:\Users\Nabi\Desktop\26-1\Parallel Programming\project"
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 BIN_DIR = os.path.join(PROJECT_DIR, "build", "Release")
 
 MC_BIN = os.path.join(BIN_DIR, "play_monte_carlo_cuda.exe")

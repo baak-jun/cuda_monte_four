@@ -21,6 +21,28 @@ def parse_args():
     parser.add_argument("--output", type=Path, default=PROJECT_DIR / "benchmark_results.json")
     parser.add_argument("--mc-simulations", type=int, default=10_000_000)
     parser.add_argument("--seed", type=int, default=12345)
+    parser.add_argument(
+        "--frontier-only",
+        action="store_true",
+        help="run only the hybrid frontier-depth experiment",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=120,
+        help="timeout for each hybrid frontier run",
+    )
+    parser.add_argument(
+        "--single-run",
+        action="store_true",
+        help="skip warm-up and measure each frontier depth once",
+    )
+    parser.add_argument(
+        "--frontier-depths",
+        type=int,
+        nargs="+",
+        help="frontier depths to test (default: 2 through 7)",
+    )
     return parser.parse_args()
 
 
@@ -208,10 +230,17 @@ def benchmark_cpu_vs_hybrid(results, quick):
         print(f"  depth={depth:2d}: result match={matches}")
 
 
-def benchmark_frontier_depth(results, quick):
-    repeats = 1 if quick else 3
+def benchmark_frontier_depth(
+    results,
+    quick,
+    timeout_seconds,
+    single_run,
+    selected_depths,
+):
+    repeats = 1 if quick or single_run else 3
+    warmups = 0 if single_run else 1
     max_depth = 12 if quick else 16
-    frontier_depths = [2, 4] if quick else [2, 3, 4, 5, 6, 7]
+    frontier_depths = selected_depths or ([2, 4] if quick else [2, 3, 4, 5, 6, 7])
 
     print("\n[3/3] Hybrid frontier-depth tuning")
     for frontier_depth in frontier_depths:
@@ -224,7 +253,12 @@ def benchmark_frontier_depth(results, quick):
             "--threads",
             256,
         ]
-        measured = run_repeated(command, repeats, timeout=120, warmups=1)
+        measured = run_repeated(
+            command,
+            repeats,
+            timeout=timeout_seconds,
+            warmups=warmups,
+        )
         results["frontier_depth_tuning"].append(
             {"frontier_depth": frontier_depth, "max_depth": max_depth, **measured}
         )
@@ -258,9 +292,16 @@ def main():
     }
 
     print("=== Connect Four Benchmark ===")
-    benchmark_monte_carlo(results, simulations, args.seed, args.quick)
-    benchmark_cpu_vs_hybrid(results, args.quick)
-    benchmark_frontier_depth(results, args.quick)
+    if not args.frontier_only:
+        benchmark_monte_carlo(results, simulations, args.seed, args.quick)
+        benchmark_cpu_vs_hybrid(results, args.quick)
+    benchmark_frontier_depth(
+        results,
+        args.quick,
+        args.timeout_seconds,
+        args.single_run,
+        args.frontier_depths,
+    )
 
     args.output.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"\nRaw results saved to {args.output}")
