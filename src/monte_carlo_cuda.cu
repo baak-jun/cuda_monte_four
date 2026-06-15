@@ -164,7 +164,7 @@ __device__ connect4::Outcome rollout(DeviceBoard board, std::uint32_t& rng) {
     return connect4::Outcome::Draw;
 }
 
-__global__ void monte_carlo_kernel(DeviceBoard start, int simulations, std::uint32_t seed, Counts* counts) {
+__global__ void monte_carlo_kernel_shared(DeviceBoard start, int simulations, std::uint32_t seed, Counts* counts) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     
     // Shared memory for block-level accumulation
@@ -209,6 +209,20 @@ __global__ void monte_carlo_kernel(DeviceBoard start, int simulations, std::uint
     }
 }
 
+__global__ void monte_carlo_kernel_global(DeviceBoard start, int simulations, std::uint32_t seed, Counts* counts) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < simulations) {
+        std::uint32_t rng = seed ^ (0x9E3779B9U * (idx + 1));
+        const connect4::Outcome outcome = rollout(start, rng);
+        if (outcome == connect4::Outcome::BlackWin) {
+            atomicAdd(&counts->black_wins, 1ULL);
+        } else if (outcome == connect4::Outcome::WhiteWin) {
+            atomicAdd(&counts->white_wins, 1ULL);
+        } else {
+            atomicAdd(&counts->draws, 1ULL);
+        }
+    }
+}
 
 void check_cuda(cudaError_t error, const char* label) {
     if (error != cudaSuccess) {
@@ -232,6 +246,15 @@ int parse_int_arg(int argc, char** argv, const std::string& name, int fallback) 
     for (int i = 1; i + 1 < argc; ++i) {
         if (argv[i] == name) {
             return std::atoi(argv[i + 1]);
+        }
+    }
+    return fallback;
+}
+
+std::string parse_string_arg(int argc, char** argv, const std::string& name, const std::string& fallback) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (argv[i] == name) {
+            return argv[i + 1];
         }
     }
     return fallback;
@@ -276,8 +299,12 @@ int main(int argc, char** argv) {
         const int simulations = parse_int_arg(argc, argv, "--simulations", 1'000'000);
         const int threads = parse_int_arg(argc, argv, "--threads", 256);
         const int seed = parse_int_arg(argc, argv, "--seed", 12345);
+        const std::string mode = parse_string_arg(argc, argv, "--mode", "shared");
         if (simulations <= 0 || threads <= 0) {
             throw std::runtime_error("--simulations and --threads must be positive");
+        }
+        if (mode != "shared" && mode != "global") {
+            throw std::runtime_error("--mode must be either 'shared' or 'global'");
         }
 
         const connect4::Board host_board = board_from_moves(parse_moves(argc, argv));
@@ -306,7 +333,11 @@ int main(int argc, char** argv) {
         check_cuda(cudaEventCreate(&kernel_start), "cudaEventCreate start");
         check_cuda(cudaEventCreate(&kernel_stop), "cudaEventCreate stop");
         check_cuda(cudaEventRecord(kernel_start), "cudaEventRecord start");
-        monte_carlo_kernel<<<blocks, threads>>>(start, simulations, static_cast<std::uint32_t>(seed), device_counts);
+        if (mode == "shared") {
+            monte_carlo_kernel_shared<<<blocks, threads>>>(start, simulations, static_cast<std::uint32_t>(seed), device_counts);
+        } else {
+            monte_carlo_kernel_global<<<blocks, threads>>>(start, simulations, static_cast<std::uint32_t>(seed), device_counts);
+        }
         check_cuda(cudaGetLastError(), "kernel launch");
         check_cuda(cudaEventRecord(kernel_stop), "cudaEventRecord stop");
         check_cuda(cudaEventSynchronize(kernel_stop), "kernel sync");
@@ -320,6 +351,7 @@ int main(int argc, char** argv) {
         check_cuda(cudaFree(device_counts), "cudaFree");
 
         std::cout << "simulations=" << simulations << "\n";
+        std::cout << "mode=" << mode << "\n";
         std::cout << "black_wins=" << counts.black_wins << "\n";
         std::cout << "white_wins=" << counts.white_wins << "\n";
         std::cout << "draws=" << counts.draws << "\n";

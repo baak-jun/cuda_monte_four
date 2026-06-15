@@ -1,130 +1,701 @@
 {
-    "mc_thread_scaling": [
-        {
-            "threads": 64,
-            "duration_sec": 0.12906809999791827,
-            "sims_per_sec": 77478478.41690774
+  "metadata": {
+    "benchmark_kind": "block-size tuning, not thread scaling",
+    "mc_simulations": 10000000,
+    "seed": 12345,
+    "quick": false,
+    "timing": {
+      "end_to_end_sec": "subprocess wall time including CUDA initialization",
+      "kernel_ms": "CUDA event time reported by the executable"
+    }
+  },
+  "mc_cpu_baseline": {
+    "ok": true,
+    "end_to_end_sec": {
+      "mean": 4.216558233335188,
+      "median": 4.169645900001342,
+      "stdev": 0.19042812497456896,
+      "min": 4.053970600005414,
+      "max": 4.426058199998806,
+      "samples": 3
+    },
+    "kernel_ms": null,
+    "metrics": {
+      "simulations": "10000000",
+      "threads": "16",
+      "black_wins": "4727771",
+      "white_wins": "4253862",
+      "draws": "1018367",
+      "duration_sec": "4.41735"
+    }
+  },
+  "mc_block_size_tuning": [
+    {
+      "block_threads": 64,
+      "ok": true,
+      "end_to_end_sec": {
+        "mean": 0.27866997999954035,
+        "median": 0.2780860999992001,
+        "stdev": 0.002757429637923393,
+        "min": 0.27548299999762094,
+        "max": 0.2824631999974372,
+        "samples": 5
+      },
+      "kernel_ms": {
+        "mean": 93.73718,
+        "median": 93.7452,
+        "stdev": 2.1927223289782956,
+        "min": 91.093,
+        "max": 96.3901,
+        "samples": 5
+      },
+      "metrics": {
+        "simulations": "10000000",
+        "black_wins": "4727771",
+        "white_wins": "4253862",
+        "draws": "1018367",
+        "kernel_ms": "92.116",
+        "black_rate": "0.472777",
+        "white_rate": "0.425386",
+        "draw_rate": "0.101837"
+      },
+      "counts": {
+        "black_wins": 4727771,
+        "white_wins": 4253862,
+        "draws": 1018367
+      },
+      "matches_cpu_counts": true
+    },
+    {
+      "block_threads": 128,
+      "ok": true,
+      "end_to_end_sec": {
+        "mean": 0.2521286799994414,
+        "median": 0.25843239999812795,
+        "stdev": 0.022492016845359834,
+        "min": 0.2269942999992054,
+        "max": 0.27714230000128737,
+        "samples": 5
+      },
+      "kernel_ms": {
+        "mean": 89.63406,
+        "median": 86.7666,
+        "stdev": 7.53853808360746,
+        "min": 85.2787,
+        "max": 103.069,
+        "samples": 5
+      },
+      "metrics": {
+        "simulations": "10000000",
+        "black_wins": "4727771",
+        "white_wins": "4253862",
+        "draws": "1018367",
+        "kernel_ms": "103.069",
+        "black_rate": "0.472777",
+        "white_rate": "0.425386",
+        "draw_rate": "0.101837"
+      },
+      "counts": {
+        "black_wins": 4727771,
+        "white_wins": 4253862,
+        "draws": 1018367
+      },
+      "matches_cpu_counts": true
+    },
+    {
+      "block_threads": 256,
+      "ok": true,
+      "end_to_end_sec": {
+        "mean": 0.24976564000098733,
+        "median": 0.26106350000191014,
+        "stdev": 0.023732149244803897,
+        "min": 0.2202015000002575,
+        "max": 0.2729188000012073,
+        "samples": 5
+      },
+      "kernel_ms": {
+        "mean": 86.05326,
+        "median": 85.3135,
+        "stdev": 1.760151332414347,
+        "min": 85.1702,
+        "max": 89.1965,
+        "samples": 5
+      },
+      "metrics": {
+        "simulations": "10000000",
+        "black_wins": "4727771",
+        "white_wins": "4253862",
+        "draws": "1018367",
+        "kernel_ms": "85.1712",
+        "black_rate": "0.472777",
+        "white_rate": "0.425386",
+        "draw_rate": "0.101837"
+      },
+      "counts": {
+        "black_wins": 4727771,
+        "white_wins": 4253862,
+        "draws": 1018367
+      },
+      "matches_cpu_counts": true
+    },
+    {
+      "block_threads": 512,
+      "ok": true,
+      "end_to_end_sec": {
+        "mean": 0.2493369800009532,
+        "median": 0.2669943000000785,
+        "stdev": 0.026785949281682694,
+        "min": 0.21249879999959376,
+        "max": 0.2707427000059397,
+        "samples": 5
+      },
+      "kernel_ms": {
+        "mean": 85.76964000000001,
+        "median": 85.2767,
+        "stdev": 1.2668556441047274,
+        "min": 85.1026,
+        "max": 88.0292,
+        "samples": 5
+      },
+      "metrics": {
+        "simulations": "10000000",
+        "black_wins": "4727771",
+        "white_wins": "4253862",
+        "draws": "1018367",
+        "kernel_ms": "85.1026",
+        "black_rate": "0.472777",
+        "white_rate": "0.425386",
+        "draw_rate": "0.101837"
+      },
+      "counts": {
+        "black_wins": 4727771,
+        "white_wins": 4253862,
+        "draws": 1018367
+      },
+      "matches_cpu_counts": true
+    },
+    {
+      "block_threads": 1024,
+      "ok": true,
+      "end_to_end_sec": {
+        "mean": 0.24875752000225476,
+        "median": 0.25497770000220044,
+        "stdev": 0.019187116112420043,
+        "min": 0.22614169999724254,
+        "max": 0.2663384000043152,
+        "samples": 5
+      },
+      "kernel_ms": {
+        "mean": 90.81649999999999,
+        "median": 86.9919,
+        "stdev": 5.488029517504435,
+        "min": 86.7174,
+        "max": 96.9841,
+        "samples": 5
+      },
+      "metrics": {
+        "simulations": "10000000",
+        "black_wins": "4727771",
+        "white_wins": "4253862",
+        "draws": "1018367",
+        "kernel_ms": "86.7174",
+        "black_rate": "0.472777",
+        "white_rate": "0.425386",
+        "draw_rate": "0.101837"
+      },
+      "counts": {
+        "black_wins": 4727771,
+        "white_wins": 4253862,
+        "draws": 1018367
+      },
+      "matches_cpu_counts": true
+    }
+  ],
+  "cpu_vs_hybrid": [
+    {
+      "depth": 10,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.013236866664859312,
+          "median": 0.013062099998933263,
+          "stdev": 0.0005161399446734155,
+          "min": 0.01283079999848269,
+          "max": 0.01381769999716198,
+          "samples": 3
         },
-        {
-            "threads": 128,
-            "duration_sec": 0.12158749999798601,
-            "sims_per_sec": 82245296.59846318
-        },
-        {
-            "threads": 256,
-            "duration_sec": 0.12532003333520456,
-            "sims_per_sec": 79795701.72353943
-        },
-        {
-            "threads": 512,
-            "duration_sec": 0.12235743333440041,
-            "sims_per_sec": 81727768.61598755
-        },
-        {
-            "threads": 1024,
-            "duration_sec": 0.12593830000211406,
-            "sims_per_sec": 79403962.0975679
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "21871",
+          "table_states": "9871",
+          "cache_hits": "4934",
+          "cutoffs": "8480",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
         }
-    ],
-    "cpu_vs_hybrid": [
-        {
-            "depth": 10,
-            "cpu": {
-                "duration_sec": 0.03314680000039516,
-                "nodes": 21871,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": 0.1569318000038038,
-                "nodes": 19608,
-                "gpu_leaves": 16807,
-                "timeout": false
-            }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.14011696666663434,
+          "median": 0.14080939999985276,
+          "stdev": 0.0012286303215476241,
+          "min": 0.13869839999824762,
+          "max": 0.14084310000180267,
+          "samples": 3
         },
-        {
-            "depth": 11,
-            "cpu": {
-                "duration_sec": 0.022325799996906426,
-                "nodes": 117817,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": 0.2413767000034568,
-                "nodes": 19608,
-                "gpu_leaves": 16807,
-                "timeout": false
-            }
+        "kernel_ms": {
+          "mean": 21.4911,
+          "median": 21.5364,
+          "stdev": 0.1657593737922529,
+          "min": 21.3074,
+          "max": 21.6295,
+          "samples": 3
         },
-        {
-            "depth": 12,
-            "cpu": {
-                "duration_sec": 0.03384669999650214,
-                "nodes": 168862,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": 0.4882272999966517,
-                "nodes": 19608,
-                "gpu_leaves": 16807,
-                "timeout": false
-            }
-        },
-        {
-            "depth": 13,
-            "cpu": {
-                "duration_sec": 0.08176319999620318,
-                "nodes": 929598,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": 2.252338799997233,
-                "nodes": 19608,
-                "gpu_leaves": 16807,
-                "timeout": false
-            }
-        },
-        {
-            "depth": 14,
-            "cpu": {
-                "duration_sec": 0.1811708000022918,
-                "nodes": 1290704,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": 6.493678299993917,
-                "nodes": 19608,
-                "gpu_leaves": 16807,
-                "timeout": false
-            }
-        },
-        {
-            "depth": 15,
-            "cpu": {
-                "duration_sec": 0.5311068000009982,
-                "nodes": 6223555,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": null,
-                "nodes": 0,
-                "gpu_leaves": 0,
-                "timeout": true
-            }
-        },
-        {
-            "depth": 16,
-            "cpu": {
-                "duration_sec": 1.8211298000023817,
-                "nodes": 8404648,
-                "timeout": false
-            },
-            "hybrid": {
-                "duration_sec": null,
-                "nodes": 0,
-                "gpu_leaves": 0,
-                "timeout": true
-            }
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "10",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "21.3074",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
         }
-    ],
-    "frontier_depth_tuning": []
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 11,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.017665066671421908,
+          "median": 0.01747090000571916,
+          "stdev": 0.00044041483057312273,
+          "min": 0.017355100004351698,
+          "max": 0.018169200004194863,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "117817",
+          "table_states": "24085",
+          "cache_hits": "9207",
+          "cutoffs": "17417",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.22030313333137505,
+          "median": 0.22048769999673823,
+          "stdev": 0.0009688263224691811,
+          "min": 0.21925529999862192,
+          "max": 0.22116639999876497,
+          "samples": 3
+        },
+        "kernel_ms": {
+          "mean": 99.67250000000001,
+          "median": 99.7202,
+          "stdev": 0.16655416536370293,
+          "min": 99.4873,
+          "max": 99.81,
+          "samples": 3
+        },
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "11",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "99.81",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
+        }
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 12,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.028430200000002515,
+          "median": 0.029138400001102127,
+          "stdev": 0.0015454134337346294,
+          "min": 0.02665759999945294,
+          "max": 0.029494599999452475,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "168862",
+          "table_states": "71067",
+          "cache_hits": "45478",
+          "cutoffs": "63461",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.47981520000030287,
+          "median": 0.4793472000019392,
+          "stdev": 0.015114834979219395,
+          "min": 0.46493979999650037,
+          "max": 0.49515860000246903,
+          "samples": 3
+        },
+        "kernel_ms": {
+          "mean": 354.96600000000007,
+          "median": 354.391,
+          "stdev": 11.721082671835392,
+          "min": 343.543,
+          "max": 366.964,
+          "samples": 3
+        },
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "12",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "354.391",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
+        }
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 13,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.06970806666989422,
+          "median": 0.06960270000126911,
+          "stdev": 0.00039766104155834937,
+          "min": 0.06937370000377996,
+          "max": 0.07014780000463361,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "929598",
+          "table_states": "177902",
+          "cache_hits": "81891",
+          "cutoffs": "134299",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 2.2709731666667117,
+          "median": 2.2664393999948516,
+          "stdev": 0.027498207772331744,
+          "min": 2.246023600004264,
+          "max": 2.300456500001019,
+          "samples": 3
+        },
+        "kernel_ms": {
+          "mean": 2143.3433333333332,
+          "median": 2143.29,
+          "stdev": 24.690043202338387,
+          "min": 2118.68,
+          "max": 2168.06,
+          "samples": 3
+        },
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "13",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "2143.29",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
+        }
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 14,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.17690293333483473,
+          "median": 0.1709668999974383,
+          "stdev": 0.012704401105266837,
+          "min": 0.16825310000422178,
+          "max": 0.19148880000284407,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "1290704",
+          "table_states": "509169",
+          "cache_hits": "406905",
+          "cutoffs": "461005",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 6.693784300002638,
+          "median": 6.699108900000283,
+          "stdev": 0.10790067788540343,
+          "min": 6.583319900004426,
+          "max": 6.798924100003205,
+          "samples": 3
+        },
+        "kernel_ms": {
+          "mean": 6565.856666666667,
+          "median": 6566.74,
+          "stdev": 106.8177393195215,
+          "min": 6458.6,
+          "max": 6672.23,
+          "samples": 3
+        },
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "14",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "6458.6",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
+        }
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 15,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 0.5194554999980028,
+          "median": 0.5242797999962931,
+          "stdev": 0.009203055083362499,
+          "min": 0.5088432999982615,
+          "max": 0.5252433999994537,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "6223555",
+          "table_states": "1199624",
+          "cache_hits": "674805",
+          "cutoffs": "929504",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 50.95865176666848,
+          "median": 51.27198050000152,
+          "stdev": 0.6283000136658109,
+          "min": 50.23530430000392,
+          "max": 51.36867050000001,
+          "samples": 3
+        },
+        "kernel_ms": {
+          "mean": 50827.666666666664,
+          "median": 51137.9,
+          "stdev": 626.123265286743,
+          "min": 50107.0,
+          "max": 51238.1,
+          "samples": 3
+        },
+        "metrics": {
+          "|": ". . . . . . . |",
+          "0": "1 2 3 4 5 6",
+          "max_depth": "15",
+          "frontier_depth": "5",
+          "tree_nodes": "19608",
+          "gpu_leaves": "16807",
+          "kernel_ms": "51238.1",
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "move_scores": "0:0 1:0 2:0 3:0 4:0 5:0 6:0",
+          "note": "this is limited-depth exact search, not full proof"
+        }
+      },
+      "score_and_best_move_match": true
+    },
+    {
+      "depth": 16,
+      "cpu": {
+        "ok": true,
+        "end_to_end_sec": {
+          "mean": 1.6459866999988055,
+          "median": 1.6383477999988827,
+          "stdev": 0.02503098203620354,
+          "min": 1.6256652000010945,
+          "max": 1.6739470999964396,
+          "samples": 3
+        },
+        "kernel_ms": null,
+        "metrics": {
+          "result": "draw",
+          "score": "0",
+          "best_move": "3",
+          "nodes": "8404648",
+          "table_states": "3173720",
+          "cache_hits": "2938280",
+          "cutoffs": "2879125",
+          "truncated": "no",
+          "note": "max-depth is partial search, not a proof"
+        }
+      },
+      "hybrid": {
+        "ok": false,
+        "phase": "warmup",
+        "error": {
+          "ok": false,
+          "timeout": true,
+          "wall_sec": 120,
+          "stdout": "",
+          "stderr": "TIMEOUT",
+          "metrics": {}
+        }
+      },
+      "score_and_best_move_match": false
+    }
+  ],
+  "frontier_depth_tuning": [
+    {
+      "frontier_depth": 2,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    },
+    {
+      "frontier_depth": 3,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    },
+    {
+      "frontier_depth": 4,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    },
+    {
+      "frontier_depth": 5,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    },
+    {
+      "frontier_depth": 6,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    },
+    {
+      "frontier_depth": 7,
+      "max_depth": 16,
+      "ok": false,
+      "phase": "warmup",
+      "error": {
+        "ok": false,
+        "timeout": true,
+        "wall_sec": 120,
+        "stdout": "",
+        "stderr": "TIMEOUT",
+        "metrics": {}
+      }
+    }
+  ]
 }

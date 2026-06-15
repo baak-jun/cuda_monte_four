@@ -29,3 +29,6 @@ game_logs.jsonl
 
 # Error log files
 ERROR/
+
+# Local meeting notes and source materials
+회의록/
